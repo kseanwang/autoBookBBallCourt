@@ -3,7 +3,6 @@ const path = require('path');
 const { spawn } = require('child_process');
 
 const app = express();
-const PORT = 3939;
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -130,11 +129,19 @@ app.post('/api/clear', (req, res) => {
 });
 
 // ====== 啟動伺服器 ======
-app.listen(PORT, () => {
-  console.log('');
-  console.log('🏀 ================================');
-  console.log(`🏀  場地搶位控制台已啟動`);
-  console.log(`🏀  http://localhost:${PORT}`);
-  console.log('🏀 ================================');
-  console.log('');
-});
+// Vercel 會直接 import 此模組，本機開發才呼叫 listen
+if (process.env.VERCEL) {
+  // Vercel 環境：直接 export，不呼叫 listen
+  module.exports = app;
+} else {
+  const PORT = process.env.PORT || 3939;
+  app.listen(PORT, () => {
+    console.log('');
+    console.log('🏀 ================================');
+    console.log(`🏀  場地搶位控制台已啟動`);
+    console.log(`🏀  http://localhost:${PORT}`);
+    console.log('🏀 ================================');
+    console.log('');
+  });
+  module.exports = app;
+}
