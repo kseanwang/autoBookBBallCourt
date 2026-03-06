@@ -1,0 +1,19 @@
+{
+  "name": "autobookbballcourt",
+  "version": "1.0.0",
+  "description": "",
+  "main": "auto-book.js",
+  "scripts": {
+    "start": "node server.js",
+    "book": "node auto-book.js",
+    "book:now": "node auto-book.js --now"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^5.2.1",
+    "puppeteer": "^24.38.0"
+  }
+}

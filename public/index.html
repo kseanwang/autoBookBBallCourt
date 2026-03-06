@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🏀 場地搶位控制台</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+
+    .container { max-width: 800px; margin: 0 auto; padding: 24px 16px; }
+
+    header {
+      text-align: center;
+      padding: 32px 0 24px;
+    }
+    header h1 {
+      font-size: 28px;
+      background: linear-gradient(135deg, #22d3ee, #818cf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+    }
+    header p { color: #94a3b8; font-size: 14px; }
+
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .card h2 {
+      font-size: 16px;
+      color: #94a3b8;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      color: #94a3b8;
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+    .form-group input, .form-group select {
+      width: 100%;
+      padding: 10px 14px;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      color: #e2e8f0;
+      font-size: 15px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .form-group input:focus, .form-group select:focus {
+      border-color: #818cf8;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .hint {
+      font-size: 12px;
+      color: #64748b;
+      margin-top: 4px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      width: 100%;
+    }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-start {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      color: white;
+    }
+    .btn-start:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(34,197,94,0.4); }
+
+    .btn-test {
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      color: white;
+    }
+    .btn-test:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(59,130,246,0.4); }
+
+    .btn-stop {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      color: white;
+    }
+    .btn-stop:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(239,68,68,0.4); }
+
+    .btn-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .status-idle { background: #1e293b; border: 1px solid #334155; }
+    .status-running { background: #052e16; border: 1px solid #166534; color: #4ade80; }
+    .status-stopped { background: #2a1215; border: 1px solid #7f1d1d; color: #fca5a5; }
+    .status-completed { background: #052e16; border: 1px solid #166534; color: #86efac; }
+
+    .status-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .status-idle .status-dot { background: #64748b; }
+    .status-running .status-dot { background: #4ade80; animation: pulse 1.5s infinite; }
+    .status-stopped .status-dot { background: #f87171; }
+    .status-completed .status-dot { background: #86efac; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .log-box {
+      background: #020617;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 16px;
+      max-height: 400px;
+      overflow-y: auto;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 12px;
+      line-height: 1.7;
+      color: #94a3b8;
+    }
+    .log-box::-webkit-scrollbar { width: 6px; }
+    .log-box::-webkit-scrollbar-track { background: transparent; }
+    .log-box::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+
+    .log-line { white-space: pre-wrap; word-break: break-all; }
+    .log-line.success { color: #4ade80; }
+    .log-line.error { color: #f87171; }
+    .log-line.warn { color: #fbbf24; }
+    .log-line.info { color: #60a5fa; }
+
+    .preset-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .chip {
+      padding: 6px 12px;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 20px;
+      font-size: 12px;
+      color: #94a3b8;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .chip:hover { border-color: #818cf8; color: #c7d2fe; }
+    .chip.active { border-color: #818cf8; background: #1e1b4b; color: #c7d2fe; }
+
+    .divider {
+      height: 1px;
+      background: #334155;
+      margin: 20px 0;
+    }
+
+    footer {
+      text-align: center;
+      padding: 24px 0;
+      color: #475569;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>🏀 場地搶位控制台</h1>
+    <p>台北市公有場地租用 — 自動搶位排程系統</p>
+  </header>
+
+  <!-- 狀態列 -->
+  <div id="statusBar" class="status-bar status-idle">
+    <div class="status-dot"></div>
+    <span id="statusText">待命中 — 尚未設定任務</span>
+  </div>
+
+  <!-- 設定區 -->
+  <div class="card">
+    <h2>⚙️ 搶位設定</h2>
+
+    <div class="form-group">
+      <label>場地 ID（網址中的 ID）</label>
+      <input type="text" id="venueId" value="27ee824a3be0" placeholder="例如: 27ee824a3be0">
+      <div class="hint">從 https://service.gov.taipei/rental/OnLine/Step1/<b>27ee824a3be0</b> 中取得</div>
+    </div>
+
+    <div class="form-group">
+      <label>目標時段文字（需與網頁按鈕完全一致）</label>
+      <input type="text" id="targetDateText" value="2026/04/07(二) 20:00~22:00" placeholder="例如: 2026/04/07(二) 20:00~22:00">
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>目標月份</label>
+        <select id="targetMonth">
+          <option value="1">1 月</option>
+          <option value="2">2 月</option>
+          <option value="3">3 月</option>
+          <option value="4" selected>4 月</option>
+          <option value="5">5 月</option>
+          <option value="6">6 月</option>
+          <option value="7">7 月</option>
+          <option value="8">8 月</option>
+          <option value="9">9 月</option>
+          <option value="10">10 月</option>
+          <option value="11">11 月</option>
+          <option value="12">12 月</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>目標日期</label>
+        <input type="number" id="targetDay" value="7" min="1" max="31">
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>執行日期</label>
+        <input type="date" id="executeDate" value="2026-03-07">
+      </div>
+      <div class="form-group">
+        <label>執行時間</label>
+        <input type="time" id="executeTime" value="00:00" step="1">
+      </div>
+    </div>
+
+    <div class="hint" style="margin-bottom: 16px;">
+      ⏰ 腳本會在指定時間精準啟動瀏覽器，自動完成 Step1 → Step2 → Step3
+    </div>
+
+    <div class="form-group">
+      <label>常用時段快捷選擇</label>
+      <div class="preset-chips" id="presetChips">
+        <div class="chip" data-time="18:00~20:00">18:00~20:00</div>
+        <div class="chip active" data-time="20:00~22:00">20:00~22:00</div>
+        <div class="chip" data-time="08:00~10:00">08:00~10:00</div>
+        <div class="chip" data-time="16:00~18:00">16:00~18:00</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 操作按鈕 -->
+  <div class="card">
+    <h2>🚀 操作</h2>
+    <div class="btn-group">
+      <button class="btn btn-start" id="btnStart" onclick="startJob(false)">
+        ⏰ 排程執行
+      </button>
+      <button class="btn btn-test" id="btnTest" onclick="startJob(true)">
+        ⚡ 立即測試
+      </button>
+    </div>
+    <button class="btn btn-stop" id="btnStop" onclick="stopJob()" disabled>
+      ⏹️ 停止任務
+    </button>
+  </div>
+
+  <!-- 執行日誌 -->
+  <div class="card">
+    <h2>📋 執行日誌</h2>
+    <div class="log-box" id="logBox">
+      <div class="log-line info">等待任務啟動...</div>
+    </div>
+  </div>
+
+  <footer>
+    Auto Book BBall Court v1.0 — Made with ❤️
+  </footer>
+</div>
+
+<script>
+  // ====== 元素 ======
+  const statusBar = document.getElementById('statusBar');
+  const statusText = document.getElementById('statusText');
+  const logBox = document.getElementById('logBox');
+  const btnStart = document.getElementById('btnStart');
+  const btnTest = document.getElementById('btnTest');
+  const btnStop = document.getElementById('btnStop');
+
+  // ====== 時段快捷 ======
+  document.getElementById('presetChips').addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+
+    const time = chip.dataset.time;
+    const input = document.getElementById('targetDateText');
+    // 替換時段部分
+    input.value = input.value.replace(/\d{2}:\d{2}~\d{2}:\d{2}/, time);
+  });
+
+  // ====== 啟動任務 ======
+  async function startJob(runNow) {
+    const config = {
+      venueId: document.getElementById('venueId').value.trim(),
+      targetDateText: document.getElementById('targetDateText').value.trim(),
+      targetMonth: document.getElementById('targetMonth').value,
+      targetDay: document.getElementById('targetDay').value,
+      executeDate: document.getElementById('executeDate').value,
+      executeTime: document.getElementById('executeTime').value,
+      runNow,
+    };
+
+    if (!config.venueId || !config.targetDateText) {
+      alert('請填寫場地 ID 和目標時段');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || '啟動失敗');
+        return;
+      }
+      logBox.innerHTML = '<div class="log-line success">✅ 任務已啟動！</div>';
+      updateUI('running');
+    } catch (err) {
+      alert('無法連線到伺服器: ' + err.message);
+    }
+  }
+
+  // ====== 停止任務 ======
+  async function stopJob() {
+    if (!confirm('確定要停止目前的任務嗎？')) return;
+    try {
+      const res = await fetch('/api/stop', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || '停止失敗');
+        return;
+      }
+    } catch (err) {
+      alert('操作失敗: ' + err.message);
+    }
+  }
+
+  // ====== UI 更新 ======
+  function updateUI(status) {
+    statusBar.className = 'status-bar status-' + status;
+    const messages = {
+      idle: '待命中 — 尚未設定任務',
+      running: '🟢 任務執行中...',
+      stopped: '🔴 任務已停止',
+      completed: '✅ 任務已完成',
+      error: '❌ 任務出錯',
+    };
+    statusText.textContent = messages[status] || status;
+    btnStart.disabled = status === 'running';
+    btnTest.disabled = status === 'running';
+    btnStop.disabled = status !== 'running';
+  }
+
+  // ====== 日誌分類顏色 ======
+  function classifyLog(line) {
+    if (line.includes('✅') || line.includes('🎊') || line.includes('🎉')) return 'success';
+    if (line.includes('❌') || line.includes('錯誤') || line.includes('失敗')) return 'error';
+    if (line.includes('⚠️')) return 'warn';
+    if (line.includes('🔍') || line.includes('📅') || line.includes('📋') || line.includes('🎯')) return 'info';
+    return '';
+  }
+
+  // ====== 定時輪詢狀態 ======
+  let lastLogCount = 0;
+
+  async function pollStatus() {
+    try {
+      const res = await fetch('/api/status');
+      const data = await res.json();
+
+      updateUI(data.status);
+
+      if (data.logs && data.logs.length > 0) {
+        // 只更新新的 log
+        if (data.logs.length !== lastLogCount) {
+          logBox.innerHTML = data.logs
+            .map(line => `<div class="log-line ${classifyLog(line)}">${escapeHtml(line)}</div>`)
+            .join('');
+          logBox.scrollTop = logBox.scrollHeight;
+          lastLogCount = data.logs.length;
+        }
+      }
+    } catch (err) {
+      // ignore connection errors
+    }
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // 每秒輪詢
+  setInterval(pollStatus, 1000);
+</script>
+</body>
+</html>
