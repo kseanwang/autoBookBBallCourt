@@ -483,15 +483,31 @@ async function main() {
 
   // 啟動瀏覽器
   log('🌐 正在啟動瀏覽器...');
-  const browser = await puppeteer.launch({
-    headless: false,
-    defaultViewport: null,
+
+  // 判斷環境：伺服器使用 headless，本機使用有頭模式
+  const isServer = !!(process.env.CLOUDWAYS || process.env.SERVER_MODE || process.env.NODE_ENV === 'production');
+
+  const launchOptions = {
+    headless: isServer ? 'new' : false,
+    defaultViewport: isServer ? { width: 1280, height: 900 } : null,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--disable-software-rasterizer',
       '--window-size=1280,900',
     ],
-  });
+  };
+
+  // 如果設定了 CHROMIUM_PATH 環境變數，使用系統 Chromium
+  if (process.env.CHROMIUM_PATH) {
+    launchOptions.executablePath = process.env.CHROMIUM_PATH;
+    log(`   使用自訂 Chromium: ${process.env.CHROMIUM_PATH}`);
+  }
+
+  log(`   模式: ${isServer ? 'headless (伺服器)' : '有頭模式 (本機)'}`);
+  const browser = await puppeteer.launch(launchOptions);
 
   const page = await browser.newPage();
 
@@ -531,8 +547,23 @@ async function main() {
   }
 
   log(`📍 當前 URL: ${page.url()}`);
-  log('🔄 瀏覽器保持開啟中... 按 Ctrl+C 結束腳本');
-  await new Promise(() => {});
+
+  // 伺服器模式：擷取截圖後關閉瀏覽器；本機模式：保持開啟
+  const isServer = !!(process.env.CLOUDWAYS || process.env.SERVER_MODE || process.env.NODE_ENV === 'production');
+  if (isServer) {
+    try {
+      const screenshotPath = `screenshot-${Date.now()}.png`;
+      await page.screenshot({ path: screenshotPath, fullPage: true });
+      log(`📸 已儲存截圖: ${screenshotPath}`);
+    } catch (e) {
+      log(`⚠️ 截圖失敗: ${e.message}`);
+    }
+    await browser.close();
+    log('🌐 瀏覽器已關閉');
+  } else {
+    log('🔄 瀏覽器保持開啟中... 按 Ctrl+C 結束腳本');
+    await new Promise(() => {});
+  }
 }
 
 main().catch(err => {

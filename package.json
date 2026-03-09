@@ -1,12 +1,17 @@
 {
   "name": "autobookbballcourt",
   "version": "1.0.0",
-  "description": "",
-  "main": "auto-book.js",
+  "description": "台北市公有場地自動搶位系統",
+  "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "dev": "node server.js",
     "book": "node auto-book.js",
-    "book:now": "node auto-book.js --now"
+    "book:now": "node auto-book.js --now",
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:stop": "pm2 stop autobookbballcourt",
+    "pm2:restart": "pm2 restart autobookbballcourt",
+    "pm2:logs": "pm2 logs autobookbballcourt"
   },
   "keywords": [],
   "author": "",
