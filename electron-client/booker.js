@@ -22,8 +22,7 @@ class BookingSession {
   constructor(onLog, onStatus) {
     this.onLog = onLog;
     this.onStatus = onStatus;
-    this.browser = null;
-    this.page = null;
+    this.browsers = [];
     this.aborted = false;
     this.running = false;
   }
@@ -37,10 +36,8 @@ class BookingSession {
 
   stop() {
     this.aborted = true;
-    if (this.browser) {
-      this.browser.close().catch(() => {});
-      this.browser = null;
-    }
+    for (const b of this.browsers) b.close().catch(() => {});
+    this.browsers = [];
     this.onStatus({ type: 'stopped' });
   }
 
@@ -51,43 +48,44 @@ class BookingSession {
 
     const {
       venueId, targetDateText, targetMonth, targetDay,
-      executeDate, executeTime, runNow,
+      executeDate, executeTime, runNow, numBots,
     } = config;
 
     const TARGET_MONTH = parseInt(targetMonth);
     const TARGET_DAY = parseInt(targetDay);
+    const NUM_BOTS = parseInt(numBots) || 2;
+    const PRE_LOAD_SECONDS = 15;
+
     const STEP1_URL = `https://service.gov.taipei/rental/OnLine/Step1/${venueId}`;
     const STEP2_URL = `https://service.gov.taipei/rental/OnLine/Step2/${venueId}`;
-    const RETRY_TIMES = 30;
-    const RETRY_INTERVAL_MS = 50;
-    const PRE_LOAD_SECONDS = 5;
+    const STEP3_URL = `https://service.gov.taipei/rental/OnLine/Step3/${venueId}`;
 
     let EXECUTE_TIME = null;
     if (executeDate && executeTime) {
       EXECUTE_TIME = new Date(`${executeDate}T${executeTime}:00+08:00`);
     }
 
-    this.log(`🚀 搶位腳本啟動`);
+    this.log(`🚀 搶位腳本啟動 v3.0`);
     this.log(`📍 場地 ID: ${venueId}`);
     this.log(`🎯 目標時段：${targetDateText}`);
+    this.log(`🤖 並行 Bot 數量：${NUM_BOTS}`);
     if (!runNow && EXECUTE_TIME) {
       this.log(`⏰ 預定執行：${EXECUTE_TIME.toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}`);
     }
 
-    // ── 倒數等待 ──
+    // ── 倒數等待（到預熱時間）──
     if (!runNow && EXECUTE_TIME) {
       const preLoadTime = new Date(EXECUTE_TIME.getTime() - PRE_LOAD_SECONDS * 1000);
       while (true) {
         if (this.aborted) { this.running = false; return; }
         const now = new Date();
         const diff = preLoadTime.getTime() - now.getTime();
-        if (diff <= 0) { this.log('⏰ 時間到！開始執行...'); break; }
+        if (diff <= 0) { this.log('⏰ 預熱時間到！啟動瀏覽器並預載頁面...'); break; }
 
         const h = Math.floor(diff / 3600000);
         const m = Math.floor((diff % 3600000) / 60000);
         const s = Math.floor((diff % 60000) / 1000);
-        const countdown = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-        this.onStatus({ type: 'waiting', countdown });
+        this.onStatus({ type: 'waiting', countdown: `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` });
 
         await sleep(diff > 60000 ? 5000 : diff > 5000 ? 1000 : 200);
       }
@@ -104,7 +102,6 @@ class BookingSession {
       return;
     }
 
-    // ── 啟動瀏覽器 ──
     let puppeteer;
     try {
       puppeteer = require('puppeteer-core');
@@ -115,48 +112,93 @@ class BookingSession {
       return;
     }
 
-    this.log(`🌐 啟動瀏覽器...`);
     this.onStatus({ type: 'running' });
 
-    try {
-      this.browser = await puppeteer.launch({
-        executablePath: chromePath,
-        headless: false,
-        defaultViewport: null,
-        args: ['--window-size=1280,900'],
-      });
+    const launchOptions = {
+      executablePath: chromePath,
+      headless: false,
+      defaultViewport: null,
+      args: ['--window-size=1280,900'],
+    };
 
-      this.page = await this.browser.newPage();
-      await this.page.setUserAgent(
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+    const shared = { done: false, step3Url: null };
+
+    const makeBot = async (botId) => {
+      let browser;
+      try {
+        this.log(`[Bot ${botId}] 🌐 啟動瀏覽器...`);
+        browser = await puppeteer.launch(launchOptions);
+        this.browsers.push(browser);
+        const page = await browser.newPage();
+        await page.setUserAgent(
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+        );
+
+        let botAlert = false;
+        page.on('dialog', async (dialog) => {
+          const msg = dialog.message();
+          this.log(`[Bot ${botId}] 💬 彈窗: "${msg}"`);
+          await dialog.accept();
+          if (msg.includes('保留10分鐘') || msg.includes('10分鐘內預約')) {
+            botAlert = true;
+            shared.done = true;
+            this.log(`[Bot ${botId}] 🎉 偵測到預約確認彈窗 → 搶位成功！`);
+          }
+        });
+
+        await this._preLoad(page, botId, STEP1_URL, STEP2_URL, targetDateText, TARGET_MONTH, TARGET_DAY);
+
+        // 精準等待到整點
+        if (!runNow && EXECUTE_TIME) {
+          while (new Date().getTime() < EXECUTE_TIME.getTime()) {
+            if (this.aborted) break;
+            await sleep(10);
+          }
+          this.log(`[Bot ${botId}] 🎯 精準時間到達！`);
+        }
+
+        if (this.aborted) return { browser, page, success: false, botId };
+
+        const success = await this._clickSlotAndProceed(
+          page, botId, targetDateText, STEP3_URL, TARGET_MONTH, TARGET_DAY, shared, () => botAlert
+        );
+        return { browser, page, success, botId };
+      } catch (err) {
+        this.log(`[Bot ${botId}] ❌ 錯誤: ${err.message}`);
+        if (browser) {
+          await browser.close().catch(() => {});
+          this.browsers = this.browsers.filter(b => b !== browser);
+        }
+        return { browser: null, page: null, success: false, botId };
+      }
+    };
+
+    try {
+      const results = await Promise.all(
+        Array.from({ length: NUM_BOTS }, (_, i) => makeBot(i + 1))
       );
 
-      this.page.on('dialog', async (dialog) => {
-        this.log(`💬 彈窗 [${dialog.type()}]: "${dialog.message()}" → 自動確認`);
-        await dialog.accept();
-      });
+      const successResult = results.find(r => r.success && r.browser);
+      const step3Url = shared.step3Url;
 
-      // 精準等待到整點
-      if (!runNow && EXECUTE_TIME) {
-        while (new Date().getTime() < EXECUTE_TIME.getTime()) {
-          if (this.aborted) break;
-          await sleep(10);
-        }
-        this.log('🎯 精準時間到達！');
+      if (step3Url) {
+        this.log('🎊 搶位完成！請在開啟的瀏覽器中完成 Step3');
+        this.onStatus({ type: 'completed', step3Url });
+      } else {
+        this.log('⚠️ 所有 Bot 均未成功到達 Step3，請手動操作');
+        this.onStatus({ type: 'error', message: '搶位未成功' });
       }
 
-      if (!this.aborted) await this._doStep1(STEP1_URL, STEP2_URL);
-      if (!this.aborted) {
-        const ok = await this._doStep2(STEP1_URL, STEP2_URL, targetDateText, TARGET_MONTH, TARGET_DAY, RETRY_TIMES, RETRY_INTERVAL_MS);
-        if (ok) {
-          const url = this.page.url();
-          this.log('🎊 搶位完成！請在開啟的瀏覽器中完成 Step3');
-          this.onStatus({ type: 'completed', step3Url: url });
+      for (const r of results) {
+        if (r.browser && r !== successResult) {
+          await r.browser.close().catch(() => {});
+          this.browsers = this.browsers.filter(b => b !== r.browser);
+          this.log(`[Bot ${r.botId}] 🌐 瀏覽器已關閉`);
         }
       }
     } catch (err) {
       if (!this.aborted) {
-        this.log(`❌ 錯誤：${err.message}`);
+        this.log(`❌ 未預期錯誤：${err.message}`);
         this.onStatus({ type: 'error', message: err.message });
       }
     } finally {
@@ -164,206 +206,203 @@ class BookingSession {
     }
   }
 
-  // ── Step 1 ──
-  async _doStep1(STEP1_URL, STEP2_URL) {
-    this.log('📋 ========== Step 1：閱讀並同意條款 ==========');
+  // ── 預熱：直接嘗試 Step2，被重導才補做 Step1 ──
+  async _preLoad(page, botId, STEP1_URL, STEP2_URL, targetDateText, TARGET_MONTH, TARGET_DAY) {
+    this.log(`[Bot ${botId}] 📄 直接嘗試載入 Step2...`);
     try {
-      await this.page.goto(STEP1_URL, { waitUntil: 'networkidle2', timeout: 30000 });
-      this.log('✅ Step1 頁面載入完成');
+      await page.goto(STEP2_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
     } catch (err) {
-      this.log(`⚠️ Step1 載入超時: ${err.message}`);
+      this.log(`[Bot ${botId}] ⚠️ Step2 載入超時，繼續...`);
     }
 
-    for (let i = 0; i < 10; i++) {
-      if (this.aborted) return;
-      const chk = await this.page.$('#chkYes');
-      if (chk) {
-        const isChecked = await this.page.evaluate(() => document.getElementById('chkYes').checked);
-        if (!isChecked) await this.page.click('#chkYes');
-        await this.page.evaluate(() => { if (typeof CheckRead === 'function') CheckRead(); });
-        this.log('✅ checkbox 已勾選');
-        break;
-      }
-      await sleep(500);
+    if (!page.url().includes('Step2')) {
+      await this._doStep1(page, botId, STEP1_URL, STEP2_URL);
     }
 
-    await sleep(500);
+    await page.waitForSelector('.datepicker-switch', { timeout: 5000 }).catch(() => {});
+    this.log(`[Bot ${botId}] 📅 導航日曆到 ${TARGET_MONTH}/${TARGET_DAY}...`);
+    await this._navigateToTargetDate(page, TARGET_MONTH, TARGET_DAY, targetDateText);
 
-    for (let i = 0; i < 10; i++) {
-      if (this.aborted) return;
-      await this.page.evaluate(() => {
-        const cb = document.getElementById('chkYes');
-        if (cb && !cb.checked) { cb.checked = true; if (typeof CheckRead === 'function') CheckRead(); }
-      });
-      await sleep(200);
-      const btn = await this.page.$('#PersonalPolicyYes');
-      if (btn) {
-        await this.page.click('#PersonalPolicyYes');
-        this.log('✅ 已點擊「已閱讀並同意」');
-        break;
-      }
-      await sleep(500);
-    }
-
-    try {
-      await this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 });
-      this.log(`✅ 已跳轉到: ${this.page.url()}`);
-    } catch (err) {
-      this.log(`⚠️ ${err.message}`);
-      if (!this.page.url().includes('Step2')) {
-        await this.page.goto(STEP2_URL, { waitUntil: 'networkidle2', timeout: 15000 });
-      }
-    }
+    const btnInfo = await page.evaluate((t) => {
+      const btn = document.querySelector(`div.btn2[alldate="${t}"]`);
+      return btn ? { disabled: btn.classList.contains('disabled'), status: btn.getAttribute('status') } : null;
+    }, targetDateText);
+    this.log(`[Bot ${botId}] ✅ 預熱完成，按鈕: ${JSON.stringify(btnInfo)}`);
   }
 
-  // ── Step 2 ──
-  async _doStep2(STEP1_URL, STEP2_URL, targetDateText, TARGET_MONTH, TARGET_DAY, RETRY_TIMES, RETRY_INTERVAL_MS) {
-    this.log('🎯 ========== Step 2：選擇時段 ==========');
-
-    if (!this.page.url().includes('Step2')) {
-      await this.page.goto(STEP2_URL, { waitUntil: 'networkidle2', timeout: 30000 });
+  // ── Step1（被重導才呼叫）──
+  async _doStep1(page, botId, STEP1_URL, STEP2_URL) {
+    this.log(`[Bot ${botId}] 📋 Step1：閱讀並同意條款`);
+    try {
+      await page.goto(STEP1_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    } catch (err) {
+      this.log(`[Bot ${botId}] ⚠️ Step1 載入超時，繼續...`);
     }
 
-    // 導航日曆到目標月份
+    await page.waitForSelector('#chkYes', { timeout: 5000 }).catch(() => {});
+    const chk = await page.$('#chkYes');
+    if (chk) {
+      const isChecked = await page.evaluate(() => document.getElementById('chkYes').checked);
+      if (!isChecked) await page.click('#chkYes');
+      await page.evaluate(() => { if (typeof CheckRead === 'function') CheckRead(); });
+    }
+
+    await page.waitForSelector('#PersonalPolicyYes', { timeout: 5000 }).catch(() => {});
+    const btn = await page.$('#PersonalPolicyYes');
+    if (btn) {
+      try {
+        await Promise.all([
+          page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
+          page.click('#PersonalPolicyYes'),
+        ]);
+      } catch (err) {
+        if (!page.url().includes('Step2')) {
+          await page.goto(STEP2_URL, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        }
+      }
+    }
+    this.log(`[Bot ${botId}] ✅ Step1 完成`);
+  }
+
+  // ── 導航日曆到目標日期 ──
+  async _navigateToTargetDate(page, TARGET_MONTH, TARGET_DAY, targetDateText) {
     const monthNames = ['','一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
     const targetMonthCN = monthNames[TARGET_MONTH] || '';
 
-    const monthStr = String(TARGET_MONTH).padStart(2, '0');
-    const dayStr = String(TARGET_DAY).padStart(2, '0');
-    const slots = await this.page.evaluate(() =>
-      Array.from(document.querySelectorAll('.btn2')).map(b => b.textContent.trim())
-    );
-    const slotFound = slots.some(t => t.includes(`${monthStr}/${dayStr}`));
-
-    if (!slotFound) {
-      this.log(`📅 導航日曆到 ${TARGET_MONTH} 月...`);
-      for (let attempt = 0; attempt < 12; attempt++) {
-        if (this.aborted) return false;
-        const monthText = await this.page.evaluate(() => {
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const monthText = await page.evaluate(() => {
+        const sw = document.querySelector('.datepicker-switch');
+        return sw ? sw.textContent.trim() : '';
+      });
+      if (monthText.includes(targetMonthCN) || monthText.includes(`${TARGET_MONTH}月`)) break;
+      await page.evaluate(() => {
+        const nextBtn = document.querySelector('th.next');
+        if (nextBtn) nextBtn.click();
+      });
+      await page.waitForFunction(
+        (prev) => {
           const sw = document.querySelector('.datepicker-switch');
-          return sw ? sw.textContent.trim() : '';
-        });
-        if (monthText.includes(targetMonthCN) || monthText.includes(`${TARGET_MONTH}月`)) break;
-        await this.page.evaluate(() => {
-          const next = document.querySelector('th.next');
-          if (next) next.click();
-        });
-        await sleep(500);
-      }
-
-      this.log(`📅 點擊 ${TARGET_DAY} 號...`);
-      await this.page.evaluate((day) => {
-        const tds = document.querySelectorAll('.datepicker-days td.day:not(.old):not(.new)');
-        for (const td of tds) {
-          if (td.textContent.trim() === String(day)) { td.click(); return; }
-        }
-      }, TARGET_DAY);
-      await sleep(1500);
+          return sw && sw.textContent.trim() !== prev;
+        },
+        { timeout: 1000 },
+        monthText
+      ).catch(() => {});
     }
 
-    // 找時段按鈕並點擊
-    this.log('🔍 尋找時段按鈕...');
-    let timeSlotClicked = false;
-
-    for (let i = 1; i <= RETRY_TIMES; i++) {
-      if (this.aborted) return false;
-
-      const btnInfo = await this.page.evaluate((text) => {
-        const btn = document.querySelector(`div.btn2[alldate="${text}"]`);
-        if (!btn) {
-          return { exists: false, available: Array.from(document.querySelectorAll('.btn2')).map(b => b.textContent.trim()).slice(0, 5) };
-        }
-        return { exists: true, disabled: btn.classList.contains('disabled'), ischoose: btn.getAttribute('ischoose') };
-      }, targetDateText);
-
-      if (!btnInfo.exists) {
-        if (i % 10 === 0) {
-          this.log(`   第 ${i} 次未找到，可用: ${JSON.stringify(btnInfo.available)}`);
-          await this.page.reload({ waitUntil: 'networkidle2', timeout: 10000 }).catch(() => {});
-        }
-        await sleep(RETRY_INTERVAL_MS);
-        continue;
+    await page.evaluate((day) => {
+      const tds = document.querySelectorAll('.datepicker-days td.day:not(.old):not(.new)');
+      for (const td of tds) {
+        if (td.textContent.trim() === String(day)) { td.click(); return; }
       }
+    }, TARGET_DAY);
 
-      this.log(`   找到按鈕: disabled=${btnInfo.disabled}, ischoose=${btnInfo.ischoose}`);
+    await page.waitForSelector(`div.btn2[alldate="${targetDateText}"]`, { timeout: 3000 }).catch(() => {});
+  }
 
-      if (!btnInfo.disabled) {
-        const handle = await this.page.$(`div.btn2[alldate="${targetDateText}"]`);
-        if (handle) {
-          await handle.click();
-          await sleep(800);
-          const after = await this.page.evaluate((text) => {
-            const btn = document.querySelector(`div.btn2[alldate="${text}"]`);
-            return btn ? btn.getAttribute('ischoose') : null;
-          }, targetDateText);
-          if (after === '1') {
-            timeSlotClicked = true;
-            this.log('✅ 時段選取成功 (ischoose=1)');
-            break;
-          }
-          if (i % 3 === 0) {
-            await this.page.reload({ waitUntil: 'networkidle2', timeout: 10000 }).catch(() => {});
-            // 重新導航日曆
-            for (let a = 0; a < 12; a++) {
-              const mt = await this.page.evaluate(() => document.querySelector('.datepicker-switch')?.textContent.trim() || '');
-              if (mt.includes(targetMonthCN) || mt.includes(`${TARGET_MONTH}月`)) break;
-              await this.page.evaluate(() => { document.querySelector('th.next')?.click(); });
-              await sleep(500);
-            }
-            await this.page.evaluate((day) => {
-              const tds = document.querySelectorAll('.datepicker-days td.day:not(.old):not(.new)');
-              for (const td of tds) { if (td.textContent.trim() === String(day)) { td.click(); return; } }
-            }, TARGET_DAY);
-            await sleep(1500);
-          }
-          await sleep(RETRY_INTERVAL_MS);
-        }
-      } else {
-        this.log('   ⚠️ 按鈕 disabled，強制點擊（測試模式）');
-        await this.page.evaluate((text) => {
-          const btn = document.querySelector(`div.btn2[alldate="${text}"]`);
-          if (btn) btn.classList.remove('disabled');
-        }, targetDateText);
-        await sleep(100);
-        const handle = await this.page.$(`div.btn2[alldate="${targetDateText}"]`);
-        if (handle) await handle.click();
-        timeSlotClicked = true;
-        break;
-      }
-    }
-
-    if (!timeSlotClicked) {
-      this.log('❌ 無法選取目標時段');
+  // ── 點擊時段並推進到 Step3 ──
+  async _clickSlotAndProceed(page, botId, targetDateText, STEP3_URL, TARGET_MONTH, TARGET_DAY, shared, getBotAlert) {
+    if (shared.done) {
+      this.log(`[Bot ${botId}] 其他 Bot 已成功，略過`);
       return false;
     }
 
-    await sleep(500);
+    this.log(`[Bot ${botId}] 🎯 點擊目標時段...`);
 
-    // 點擊「下一步」
-    this.log('🔍 點擊「下一步」...');
-    for (let i = 0; i < 10; i++) {
-      if (this.aborted) return false;
-      const result = await this.page.evaluate(() => {
-        if (typeof showReservationAlert === 'function') { showReservationAlert(); return 'direct-call'; }
-        for (const btn of document.querySelectorAll('a.btn-green, a.btn')) {
-          if (btn.textContent.trim() === '下一步') { btn.click(); return 'text-match'; }
+    let btnHandle = await page.$(`div.btn2[alldate="${targetDateText}"]`);
+    if (!btnHandle) {
+      this.log(`[Bot ${botId}] ⚠️ 按鈕不見，重新導航...`);
+      await page.reload({ waitUntil: 'domcontentloaded', timeout: 10000 }).catch(() => {});
+      await this._navigateToTargetDate(page, TARGET_MONTH, TARGET_DAY, targetDateText);
+      btnHandle = await page.$(`div.btn2[alldate="${targetDateText}"]`);
+    }
+
+    if (!btnHandle) {
+      this.log(`[Bot ${botId}] ❌ 找不到目標時段按鈕`);
+      return false;
+    }
+
+    const btnInfo = await page.evaluate((t) => {
+      const btn = document.querySelector(`div.btn2[alldate="${t}"]`);
+      if (!btn) return null;
+      if (btn.getAttribute('status') === '4' || btn.classList.contains('rented')) return { rented: true };
+      return { disabled: btn.classList.contains('disabled'), status: btn.getAttribute('status') };
+    }, targetDateText);
+
+    if (btnInfo?.rented) {
+      this.log(`[Bot ${botId}] ❌ 時段已被他人預訂`);
+      return false;
+    }
+    this.log(`[Bot ${botId}] 按鈕狀態: ${JSON.stringify(btnInfo)}`);
+
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      if (shared.done || getBotAlert()) break;
+      if (attempt > 1) this.log(`[Bot ${botId}] 第 ${attempt} 次點擊...`);
+
+      await page.evaluate((t) => {
+        const btn = document.querySelector(`div.btn2[alldate="${t}"]`);
+        if (btn) btn.classList.remove('disabled');
+      }, targetDateText);
+
+      btnHandle = await page.$(`div.btn2[alldate="${targetDateText}"]`);
+      if (!btnHandle) break;
+      await btnHandle.click();
+
+      await page.waitForFunction(
+        (t) => {
+          const btn = document.querySelector(`div.btn2[alldate="${t}"]`);
+          return !btn || btn.getAttribute('ischoose') === '1';
+        },
+        { timeout: 1500 },
+        targetDateText
+      ).then(() => true).catch(() => false);
+
+      if (getBotAlert()) break;
+    }
+
+    await sleep(200);
+    this.log(`[Bot ${botId}] post-loop: botAlert=${getBotAlert()}, shared.done=${shared.done}`);
+
+    const naturalDeadline = Date.now() + 800;
+    while (Date.now() < naturalDeadline) {
+      if (page.url().includes('Step3')) break;
+      if (getBotAlert()) break;
+      if (shared.done) { this.log(`[Bot ${botId}] 其他 Bot 已成功，退出`); return false; }
+      await sleep(100);
+    }
+
+    if (getBotAlert()) {
+      this.log(`[Bot ${botId}] 🎉 預約確認，直接導航 Step3...`);
+      try {
+        await page.goto(STEP3_URL, { waitUntil: 'domcontentloaded', timeout: 15000 });
+      } catch (e) {
+        this.log(`[Bot ${botId}] ⚠️ goto Step3: ${e.message}`);
+      }
+    } else if (!page.url().includes('Step3') && !shared.done) {
+      this.log(`[Bot ${botId}] 🔄 觸發 showReservationAlert...`);
+      const navPromise = page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => null);
+      await page.evaluate(() => {
+        if (typeof showReservationAlert === 'function') {
+          showReservationAlert();
+        } else {
+          const btns = document.querySelectorAll('a.btn-green, a.btn');
+          for (const btn of btns) {
+            if (btn.textContent.trim() === '下一步') { btn.click(); return; }
+          }
         }
-        return null;
       });
-      if (result) { this.log(`✅ 已點擊「下一步」(${result})`); break; }
-      await sleep(500);
+      await navPromise;
     }
 
-    await sleep(2000);
-
-    try {
-      await this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 });
-      this.log(`✅ 已跳轉到: ${this.page.url()}`);
-    } catch (err) {
-      this.log(`⚠️ 等待跳轉超時: ${err.message} | URL: ${this.page.url()}`);
+    const url = page.url();
+    this.log(`[Bot ${botId}] 📍 當前 URL: ${url}`);
+    if (url.includes('Step3')) {
+      shared.done = true;
+      shared.step3Url = url;
+      this.log(`[Bot ${botId}] ✅ 成功進入 Step3！`);
+      return true;
     }
 
-    return true;
+    return getBotAlert();
   }
 }
 

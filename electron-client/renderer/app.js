@@ -79,6 +79,7 @@ startBtn.addEventListener('click', async () => {
     executeDate:    document.getElementById('executeDate').value,
     executeTime:    document.getElementById('executeTime').value,
     runNow:         document.getElementById('runNow').checked,
+    numBots:        parseInt(document.getElementById('numBots').value) || 2,
   };
 
   if (!config.venueId || !config.targetDateText) {
