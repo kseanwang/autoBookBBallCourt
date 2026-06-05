@@ -1,0 +1,28 @@
+appId: com.autobookbball.agent
+productName: 場地搶位Agent
+copyright: Copyright © 2026
+
+mac:
+  category: public.app-category.utilities
+  hardenedRuntime: false
+  identity: null
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+
+dmg:
+  window:
+    width: 540
+    height: 400
+
+asar: true
+compression: normal
+
+files:
+  - "**/*"
+  - "!node_modules/.cache/**"
+  - "!dist/**"
+  - "!.git/**"
+  - "!*.md"

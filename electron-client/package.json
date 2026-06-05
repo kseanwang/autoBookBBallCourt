@@ -1,0 +1,17 @@
+{
+  "name": "court-booker-agent",
+  "version": "1.0.0",
+  "description": "台北市公有場地搶位 Agent",
+  "main": "main.js",
+  "scripts": {
+    "start": "ELECTRON_RUN_AS_NODE= electron .",
+    "build:mac": "electron-builder --mac --config electron-builder.yml"
+  },
+  "devDependencies": {
+    "electron": "^28.3.3",
+    "electron-builder": "^24.0.0"
+  },
+  "dependencies": {
+    "puppeteer-core": "^24.0.0"
+  }
+}
