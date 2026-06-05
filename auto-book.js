@@ -48,6 +48,9 @@ const PRE_LOAD_SECONDS = 5;
 const RETRY_TIMES = 30;
 const RETRY_INTERVAL_MS = 50;
 
+// 當偵測到「保留10分鐘」彈窗時設為 true，表示搶位成功
+let reservationAlertDetected = false;
+
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -309,6 +312,13 @@ async function doStep2(page) {
   let timeSlotClicked = false;
 
   for (let i = 1; i <= RETRY_TIMES; i++) {
+    // 每次迴圈先檢查是否已收到預約確認彈窗
+    if (reservationAlertDetected) {
+      log('   🎉 預約確認彈窗已觸發，跳出重試迴圈');
+      timeSlotClicked = true;
+      break;
+    }
+
     // 先檢查按鈕是否存在及其狀態
     const btnInfo = await page.evaluate((targetText) => {
       const btn = document.querySelector(`div.btn2[alldate="${targetText}"]`);
@@ -321,6 +331,7 @@ async function doStep2(page) {
         disabled: btn.classList.contains('disabled'),
         status: btn.getAttribute('status'),
         ischoose: btn.getAttribute('ischoose'),
+        classes: btn.className,
         text: btn.textContent.trim(),
       };
     }, TARGET_DATE_TEXT);
@@ -332,12 +343,19 @@ async function doStep2(page) {
       if (i % 10 === 0) {
         log('🔄 重新整理頁面...');
         await page.reload({ waitUntil: 'networkidle2', timeout: 10000 }).catch(() => {});
+        if (reservationAlertDetected) { timeSlotClicked = true; break; }
       }
       await sleep(RETRY_INTERVAL_MS);
       continue;
     }
 
     log(`   找到按鈕: disabled=${btnInfo.disabled}, status=${btnInfo.status}, ischoose=${btnInfo.ischoose}`);
+
+    // 時段已被他人搶走 (status=4 / rented class) → 立即停止
+    if (btnInfo.status === '4' || (btnInfo.classes && btnInfo.classes.includes('rented'))) {
+      log('   ❌ 時段已被他人預訂 (rented)，停止搶位');
+      return false;
+    }
 
     if (!btnInfo.disabled) {
       // ✅ 按鈕可用（正式開放狀態）— 用 Puppeteer 原生滑鼠點擊
@@ -347,11 +365,18 @@ async function doStep2(page) {
         await btnHandle.click();
         await sleep(800);
 
+        // 優先檢查是否已收到預約確認彈窗（比 ischoose 更可靠）
+        if (reservationAlertDetected) {
+          log('   🎉 點擊後收到預約確認彈窗，搶位成功！');
+          timeSlotClicked = true;
+          break;
+        }
+
         // 驗證是否選取成功 (ischoose 應變為 "1")
         const afterClick = await page.evaluate((targetText) => {
           const btn = document.querySelector(`div.btn2[alldate="${targetText}"]`);
           return btn ? { ischoose: btn.getAttribute('ischoose'), classes: btn.className } : null;
-        }, TARGET_DATE_TEXT);
+        }, TARGET_DATE_TEXT).catch(() => null);
         log(`   點擊後狀態: ${JSON.stringify(afterClick)}`);
 
         if (afterClick && afterClick.ischoose === '1') {
@@ -363,9 +388,15 @@ async function doStep2(page) {
           // 重新整理再試（可能需要等到 status 改變）
           if (i % 3 === 0) {
             log('   🔄 重新整理頁面...');
-            await page.reload({ waitUntil: 'networkidle2', timeout: 10000 }).catch(() => {});
-            // 重新導航日曆
-            await navigateToTargetDate(page);
+            try {
+              await page.reload({ waitUntil: 'networkidle2', timeout: 10000 }).catch(() => {});
+              if (reservationAlertDetected) { timeSlotClicked = true; break; }
+              // 重新導航日曆
+              await navigateToTargetDate(page);
+            } catch (e) {
+              if (reservationAlertDetected) { timeSlotClicked = true; break; }
+              log(`   ⚠️ 重新整理後導航失敗 (頁面可能已跳轉): ${e.message}`);
+            }
           }
           await sleep(RETRY_INTERVAL_MS);
           continue;
@@ -517,9 +548,15 @@ async function main() {
 
   // 🔑 預先設定 dialog handler — 自動按掉所有 JS 彈窗 (alert/confirm/prompt)
   page.on('dialog', async (dialog) => {
-    log(`💬 偵測到 JS 彈窗 [${dialog.type()}]: "${dialog.message()}"`);
-    await dialog.accept(); // 按「確定」
+    const msg = dialog.message();
+    log(`💬 偵測到 JS 彈窗 [${dialog.type()}]: "${msg}"`);
+    await dialog.accept();
     log('   ✅ 已自動按掉彈窗');
+    // 「保留10分鐘」= 伺服器已確認預約成功
+    if (msg.includes('保留10分鐘') || msg.includes('10分鐘內預約')) {
+      reservationAlertDetected = true;
+      log('   🎉 偵測到預約確認彈窗 → 搶位成功！');
+    }
   });
 
   // 精準等待到 00:00:00
