@@ -9,42 +9,21 @@ set -e
 echo "🏀 場地搶位系統 — Cloudways 部署開始"
 echo "========================================"
 
-# 1. 安裝 Chromium 與相依套件（Puppeteer 需要）
+# 1. 載入 nvm 環境（確保 npm/pm2 可用）
 echo ""
-echo "📦 Step 1: 安裝 Chromium 瀏覽器相依套件..."
-sudo apt-get update -y
-sudo apt-get install -y \
-  chromium-browser \
-  fonts-liberation \
-  libappindicator3-1 \
-  libasound2 \
-  libatk-bridge2.0-0 \
-  libatk1.0-0 \
-  libcups2 \
-  libdbus-1-3 \
-  libdrm2 \
-  libgbm1 \
-  libgtk-3-0 \
-  libnspr4 \
-  libnss3 \
-  libx11-xcb1 \
-  libxcomposite1 \
-  libxdamage1 \
-  libxrandr2 \
-  xdg-utils \
-  wget \
-  ca-certificates \
-  --no-install-recommends
-
-# 確認 Chromium 路徑
-CHROMIUM_PATH=$(which chromium-browser 2>/dev/null || which chromium 2>/dev/null || echo "")
-if [ -z "$CHROMIUM_PATH" ]; then
-  echo "⚠️  未找到系統 Chromium，Puppeteer 將使用內建 Chromium"
+echo "⚙️  Step 1: 載入 nvm 環境..."
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+if [ -s "$NVM_DIR/nvm.sh" ]; then
+  source "$NVM_DIR/nvm.sh"
+  echo "   ✅ nvm 已載入，Node: $(node -v), npm: $(npm -v)"
 else
-  echo "✅ Chromium 位置: $CHROMIUM_PATH"
-  echo ""
-  echo "💡 如要使用系統 Chromium，請編輯 ecosystem.config.js："
-  echo "   取消註解 CHROMIUM_PATH 並設為: $CHROMIUM_PATH"
+  echo "   ⚠️  未找到 nvm，嘗試使用系統 node/npm..."
+fi
+
+# 確認 npm 可用
+if ! command -v npm &> /dev/null; then
+  echo "   ❌ npm 找不到，請確認 Node.js 已安裝"
+  exit 1
 fi
 
 # 2. 安裝 Node.js 相依套件
@@ -57,7 +36,7 @@ echo ""
 echo "📁 Step 3: 建立日誌目錄..."
 mkdir -p logs
 
-# 4. 安裝 PM2（如果尚未安裝）
+# 4. 確認 PM2
 echo ""
 echo "📦 Step 4: 確認 PM2..."
 if ! command -v pm2 &> /dev/null; then
