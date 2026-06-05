@@ -46,7 +46,7 @@ if (externalConfig?.executeDate && externalConfig?.executeTime) {
 
 const PRE_LOAD_SECONDS = 5;
 const RETRY_TIMES = 30;
-const RETRY_INTERVAL_MS = 500;
+const RETRY_INTERVAL_MS = 50;
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -546,9 +546,15 @@ async function main() {
     log('⚠️ ===========================');
   }
 
-  log(`📍 當前 URL: ${page.url()}`);
+  const currentUrl = page.url();
+  log(`📍 當前 URL: ${currentUrl}`);
 
-  // 伺服器模式：擷取截圖後關閉瀏覽器；本機模式：保持開啟
+  // 輸出 Step3 URL 供控制台顯示按鈕
+  if (step2Success && currentUrl.includes('Step3')) {
+    log(`STEP3_URL: ${currentUrl}`);
+  }
+
+  // 伺服器模式：擷取截圖後保持開啟 10 分鐘（讓使用者有時間開啟 Step3）；本機模式：保持開啟
   if (isServer) {
     try {
       const screenshotPath = `screenshot-${Date.now()}.png`;
@@ -556,6 +562,10 @@ async function main() {
       log(`📸 已儲存截圖: ${screenshotPath}`);
     } catch (e) {
       log(`⚠️ 截圖失敗: ${e.message}`);
+    }
+    if (step2Success) {
+      log('⏳ 瀏覽器保持開啟 10 分鐘，請盡快點選控制台的「開啟 Step 3」按鈕');
+      await sleep(600000); // 10 分鐘
     }
     await browser.close();
     log('🌐 瀏覽器已關閉');

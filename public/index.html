@@ -118,6 +118,7 @@
     .job-card.running { border-color: #166534; }
     .job-card.completed { border-color: #1e3a5f; }
     .job-card.stopped, .job-card.error { border-color: #3f1215; }
+    .job-card.step3_ready { border-color: #4ade80; box-shadow: 0 0 16px rgba(74,222,128,0.2); }
 
     .job-header {
       display: flex;
@@ -140,6 +141,7 @@
     .running .job-dot { background: #4ade80; animation: pulse 1.5s infinite; }
     .completed .job-dot { background: #60a5fa; }
     .stopped .job-dot, .error .job-dot { background: #f87171; }
+    .step3_ready .job-dot { background: #4ade80; animation: pulse 1s infinite; }
 
     @keyframes pulse {
       0%, 100% { opacity: 1; }
@@ -155,6 +157,7 @@
     .running .job-status-text { background: #052e16; color: #4ade80; }
     .completed .job-status-text { background: #0c1a2e; color: #60a5fa; }
     .stopped .job-status-text, .error .job-status-text { background: #1f0a0b; color: #f87171; }
+    .step3_ready .job-status-text { background: #14532d; color: #4ade80; font-size: 13px; }
 
     .job-log {
       background: #020617;
@@ -203,6 +206,36 @@
       transition: all 0.2s;
     }
     .btn-clear:hover { border-color: #475569; color: #94a3b8; }
+
+    .step3-banner {
+      margin-top: 12px;
+      padding: 14px;
+      background: linear-gradient(135deg, #14532d, #166534);
+      border: 1px solid #4ade80;
+      border-radius: 10px;
+      text-align: center;
+    }
+    .step3-banner p {
+      font-size: 13px;
+      color: #bbf7d0;
+      margin-bottom: 10px;
+    }
+    .btn-step3 {
+      display: inline-block;
+      width: 100%;
+      padding: 13px;
+      background: linear-gradient(135deg, #4ade80, #22c55e);
+      color: #052e16;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 800;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s;
+      letter-spacing: 0.5px;
+    }
+    .btn-step3:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(74,222,128,0.5); }
 
     .empty-state {
       text-align: center;
@@ -420,7 +453,7 @@
   }
 
   function statusLabel(s) {
-    const map = { running: '搶位中', completed: '已完成', stopped: '已停止', error: '錯誤' };
+    const map = { running: '搶位中', completed: '已完成', stopped: '已停止', error: '錯誤', step3_ready: '搶到了！' };
     return map[s] || s;
   }
 
@@ -438,6 +471,12 @@
       const stopBtn = job.status === 'running'
         ? `<button class="btn-stop-job" onclick="stopJob('${job.id}')">⏹ 停止這個 Bot</button>`
         : '';
+      const step3Banner = job.step3Url
+        ? `<div class="step3-banner">
+            <p>🎊 搶到時段了！請在 <b>10 分鐘內</b>點下方按鈕完成填表，逾時 session 可能失效</p>
+            <a class="btn-step3" href="${job.step3Url}" target="_blank" rel="noopener">🏀 開啟 Step 3 填寫申請表</a>
+           </div>`
+        : '';
       return `
         <div class="job-card ${job.status}">
           <div class="job-header">
@@ -448,6 +487,7 @@
             <span class="job-status-text">${statusLabel(job.status)}</span>
           </div>
           <div class="job-log" id="log_${job.id}">${logHtml}</div>
+          ${step3Banner}
           ${stopBtn}
         </div>`;
     }).join('');

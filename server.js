@@ -23,6 +23,7 @@ app.get('/api/status', (req, res) => {
     status: j.status,
     startTime: j.startTime,
     logs: j.logs.slice(-100),
+    step3Url: j.step3Url || null,
   }));
   res.json({ jobs: jobList });
 });
@@ -71,6 +72,11 @@ app.post('/api/start', (req, res) => {
     if (line) {
       job.logs.push(line);
       if (job.logs.length > 500) job.logs = job.logs.slice(-300);
+      const urlMatch = line.match(/STEP3_URL:\s*(https?:\/\/\S+)/);
+      if (urlMatch) {
+        job.step3Url = urlMatch[1];
+        job.status = 'step3_ready';
+      }
     }
   };
 
