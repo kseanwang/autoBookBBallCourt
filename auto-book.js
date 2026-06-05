@@ -32,8 +32,8 @@ if (configIdx !== -1 && process.argv[configIdx + 1]) {
 const VENUE_ID = externalConfig?.venueId || '27ee824a3be0';
 const STEP1_URL = `https://service.gov.taipei/rental/OnLine/Step1/${VENUE_ID}`;
 const STEP2_URL = `https://service.gov.taipei/rental/OnLine/Step2/${VENUE_ID}`;
-const TARGET_DATE_TEXT = externalConfig?.targetDateText || '2026/04/07(二) 20:00~22:00';
-const TARGET_MONTH = externalConfig?.targetMonth || 4;
+const TARGET_DATE_TEXT = externalConfig?.targetDateText || '2026/07/07(二) 20:00~22:00';
+const TARGET_MONTH = externalConfig?.targetMonth || 7;
 const TARGET_DAY = externalConfig?.targetDay || 7;
 
 // 執行時間
@@ -41,7 +41,7 @@ let EXECUTE_TIME;
 if (externalConfig?.executeDate && externalConfig?.executeTime) {
   EXECUTE_TIME = new Date(`${externalConfig.executeDate}T${externalConfig.executeTime}:00+08:00`);
 } else {
-  EXECUTE_TIME = new Date('2026-03-07T00:00:00+08:00');
+  EXECUTE_TIME = new Date('2026-06-06T00:00:00+08:00');
 }
 
 const PRE_LOAD_SECONDS = 5;
@@ -549,7 +549,6 @@ async function main() {
   log(`📍 當前 URL: ${page.url()}`);
 
   // 伺服器模式：擷取截圖後關閉瀏覽器；本機模式：保持開啟
-  const isServer = !!(process.env.CLOUDWAYS || process.env.SERVER_MODE || process.env.NODE_ENV === 'production');
   if (isServer) {
     try {
       const screenshotPath = `screenshot-${Date.now()}.png`;

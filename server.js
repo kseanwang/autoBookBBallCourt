@@ -7,54 +7,46 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ====== 狀態管理 ======
-let currentJob = null; // { process, config, status, logs }
+// ====== 狀態管理：支援多個並行任務 ======
+const jobs = new Map(); // jobId -> job object
+let jobSeq = 0;
 
-// ====== API: 取得目前任務狀態 ======
+function makeJobId() {
+  return `job_${++jobSeq}_${Date.now()}`;
+}
+
+// ====== API: 取得所有任務狀態 ======
 app.get('/api/status', (req, res) => {
-  if (!currentJob) {
-    return res.json({ running: false, status: 'idle', logs: [] });
-  }
-  res.json({
-    running: currentJob.status === 'running',
-    status: currentJob.status,
-    config: currentJob.config,
-    logs: currentJob.logs.slice(-200), // 最近 200 條
-  });
+  const jobList = Array.from(jobs.values()).map(j => ({
+    id: j.id,
+    name: j.config.name || '未知',
+    status: j.status,
+    startTime: j.startTime,
+    logs: j.logs.slice(-100),
+  }));
+  res.json({ jobs: jobList });
 });
 
-// ====== API: 啟動搶位任務 ======
+// ====== API: 啟動搶位任務（允許多個並行） ======
 app.post('/api/start', (req, res) => {
-  if (currentJob && currentJob.status === 'running') {
-    return res.status(400).json({ error: '已有任務正在執行中，請先停止' });
-  }
-
   const {
-    venueId,
-    targetDateText,
-    targetMonth,
-    targetDay,
-    executeDate,
-    executeTime,
-    runNow,
+    venueId, targetDateText, targetMonth, targetDay,
+    executeDate, executeTime, runNow,
   } = req.body;
 
-  // 驗證必要欄位
   if (!venueId || !targetDateText || !executeDate || !executeTime) {
     return res.status(400).json({ error: '缺少必要設定欄位' });
   }
 
+  const jobId = makeJobId();
   const config = {
-    venueId,
-    targetDateText,
+    venueId, targetDateText,
     targetMonth: parseInt(targetMonth),
     targetDay: parseInt(targetDay),
-    executeDate,
-    executeTime,
+    executeDate, executeTime,
     runNow: !!runNow,
   };
 
-  // 組合參數啟動 auto-book.js
   const args = ['auto-book.js'];
   if (config.runNow) args.push('--now');
   args.push('--config', JSON.stringify(config));
@@ -64,22 +56,21 @@ app.post('/api/start', (req, res) => {
     env: { ...process.env },
   });
 
-  currentJob = {
+  const job = {
+    id: jobId,
     process: child,
     config,
     status: 'running',
     logs: [],
     startTime: new Date().toISOString(),
   };
+  jobs.set(jobId, job);
 
   const addLog = (msg) => {
     const line = msg.toString().trim();
     if (line) {
-      currentJob.logs.push(line);
-      // 只保留最近 500 條
-      if (currentJob.logs.length > 500) {
-        currentJob.logs = currentJob.logs.slice(-300);
-      }
+      job.logs.push(line);
+      if (job.logs.length > 500) job.logs = job.logs.slice(-300);
     }
   };
 
@@ -87,44 +78,41 @@ app.post('/api/start', (req, res) => {
   child.stderr.on('data', addLog);
 
   child.on('close', (code) => {
-    if (currentJob && currentJob.process === child) {
-      currentJob.status = code === 0 ? 'completed' : 'stopped';
-      currentJob.logs.push(`[程序結束] exit code: ${code}`);
+    if (jobs.get(jobId) === job) {
+      job.status = code === 0 ? 'completed' : 'stopped';
+      job.logs.push(`[程序結束] exit code: ${code}`);
     }
   });
 
   child.on('error', (err) => {
-    if (currentJob && currentJob.process === child) {
-      currentJob.status = 'error';
-      currentJob.logs.push(`[錯誤] ${err.message}`);
-    }
+    job.status = 'error';
+    job.logs.push(`[錯誤] ${err.message}`);
   });
 
-  res.json({ success: true, message: '搶位任務已啟動', config });
+  res.json({ success: true, jobId, name: config.name });
 });
 
-// ====== API: 停止任務 ======
-app.post('/api/stop', (req, res) => {
-  if (!currentJob || currentJob.status !== 'running') {
-    return res.status(400).json({ error: '沒有正在執行的任務' });
+// ====== API: 停止特定任務 ======
+app.post('/api/stop/:id', (req, res) => {
+  const job = jobs.get(req.params.id);
+  if (!job || job.status !== 'running') {
+    return res.status(400).json({ error: '找不到執行中的任務' });
   }
-
   try {
-    currentJob.process.kill('SIGTERM');
-    currentJob.status = 'stopped';
-    currentJob.logs.push('[手動停止] 任務已被使用者停止');
-    res.json({ success: true, message: '任務已停止' });
+    job.process.kill('SIGTERM');
+    job.status = 'stopped';
+    job.logs.push('[手動停止] 任務已被使用者停止');
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: `停止失敗: ${err.message}` });
   }
 });
 
-// ====== API: 清除歷史 ======
+// ====== API: 清除已完成/停止的任務 ======
 app.post('/api/clear', (req, res) => {
-  if (currentJob && currentJob.status === 'running') {
-    return res.status(400).json({ error: '任務仍在執行中' });
+  for (const [id, job] of jobs.entries()) {
+    if (job.status !== 'running') jobs.delete(id);
   }
-  currentJob = null;
   res.json({ success: true });
 });
 

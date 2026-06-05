@@ -13,50 +13,46 @@
       min-height: 100vh;
     }
 
-    .container { max-width: 800px; margin: 0 auto; padding: 24px 16px; }
+    .container { max-width: 640px; margin: 0 auto; padding: 20px 16px 40px; }
 
-    header {
-      text-align: center;
-      padding: 32px 0 24px;
-    }
+    header { text-align: center; padding: 28px 0 20px; }
     header h1 {
-      font-size: 28px;
+      font-size: 26px;
       background: linear-gradient(135deg, #22d3ee, #818cf8);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
-    header p { color: #94a3b8; font-size: 14px; }
+    header p { color: #64748b; font-size: 13px; }
 
     .card {
       background: #1e293b;
       border: 1px solid #334155;
       border-radius: 12px;
-      padding: 24px;
-      margin-bottom: 20px;
+      padding: 20px;
+      margin-bottom: 16px;
     }
-    .card h2 {
-      font-size: 16px;
+    .card-title {
+      font-size: 14px;
       color: #94a3b8;
+      font-weight: 600;
       margin-bottom: 16px;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
     }
 
-    .form-group {
-      margin-bottom: 16px;
-    }
+    .form-group { margin-bottom: 14px; }
     .form-group label {
       display: block;
-      font-size: 13px;
+      font-size: 12px;
       color: #94a3b8;
-      margin-bottom: 6px;
+      margin-bottom: 5px;
       font-weight: 500;
     }
     .form-group input, .form-group select {
       width: 100%;
-      padding: 10px 14px;
+      padding: 10px 12px;
       background: #0f172a;
       border: 1px solid #334155;
       border-radius: 8px;
@@ -65,290 +61,316 @@
       outline: none;
       transition: border-color 0.2s;
     }
-    .form-group input:focus, .form-group select:focus {
-      border-color: #818cf8;
-    }
+    .form-group input:focus, .form-group select:focus { border-color: #818cf8; }
 
-    .form-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-    }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
-    .hint {
-      font-size: 12px;
-      color: #64748b;
-      margin-top: 4px;
-    }
+    .hint { font-size: 11px; color: #475569; margin-top: 4px; }
 
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      padding: 12px 24px;
-      border: none;
-      border-radius: 8px;
-      font-size: 15px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
+    /* 大按鈕 */
+    .btn-join {
       width: 100%;
-    }
-    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    .btn-start {
+      padding: 16px;
       background: linear-gradient(135deg, #22c55e, #16a34a);
       color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 17px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      letter-spacing: 0.5px;
     }
-    .btn-start:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(34,197,94,0.4); }
+    .btn-join:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(34,197,94,0.4); }
+    .btn-join:active { transform: translateY(0); }
 
-    .btn-test {
+    .btn-now {
+      width: 100%;
+      padding: 12px;
       background: linear-gradient(135deg, #3b82f6, #2563eb);
       color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 10px;
+      transition: all 0.2s;
     }
-    .btn-test:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(59,130,246,0.4); }
+    .btn-now:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(59,130,246,0.4); }
 
-    .btn-stop {
-      background: linear-gradient(135deg, #ef4444, #dc2626);
-      color: white;
-    }
-    .btn-stop:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(239,68,68,0.4); }
-
-    .btn-group {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
+    /* 任務列表 */
+    .job-count {
+      font-size: 13px;
+      color: #64748b;
       margin-bottom: 12px;
     }
+    .job-count span { color: #4ade80; font-weight: 700; }
 
-    .status-bar {
+    .job-card {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 10px;
+      position: relative;
+    }
+    .job-card.running { border-color: #166534; }
+    .job-card.completed { border-color: #1e3a5f; }
+    .job-card.stopped, .job-card.error { border-color: #3f1215; }
+
+    .job-header {
       display: flex;
       align-items: center;
-      gap: 10px;
-      padding: 12px 16px;
-      border-radius: 8px;
-      margin-bottom: 16px;
-      font-size: 14px;
-      font-weight: 500;
+      justify-content: space-between;
+      margin-bottom: 8px;
     }
-    .status-idle { background: #1e293b; border: 1px solid #334155; }
-    .status-running { background: #052e16; border: 1px solid #166534; color: #4ade80; }
-    .status-stopped { background: #2a1215; border: 1px solid #7f1d1d; color: #fca5a5; }
-    .status-completed { background: #052e16; border: 1px solid #166534; color: #86efac; }
-
-    .status-dot {
-      width: 10px; height: 10px;
+    .job-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .job-dot {
+      width: 8px; height: 8px;
       border-radius: 50%;
       flex-shrink: 0;
     }
-    .status-idle .status-dot { background: #64748b; }
-    .status-running .status-dot { background: #4ade80; animation: pulse 1.5s infinite; }
-    .status-stopped .status-dot { background: #f87171; }
-    .status-completed .status-dot { background: #86efac; }
+    .running .job-dot { background: #4ade80; animation: pulse 1.5s infinite; }
+    .completed .job-dot { background: #60a5fa; }
+    .stopped .job-dot, .error .job-dot { background: #f87171; }
 
     @keyframes pulse {
       0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
+      50% { opacity: 0.3; }
     }
 
-    .log-box {
-      background: #020617;
-      border: 1px solid #1e293b;
-      border-radius: 8px;
-      padding: 16px;
-      max-height: 400px;
-      overflow-y: auto;
-      font-family: 'SF Mono', 'Fira Code', monospace;
+    .job-status-text {
       font-size: 12px;
-      line-height: 1.7;
-      color: #94a3b8;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-weight: 600;
     }
-    .log-box::-webkit-scrollbar { width: 6px; }
-    .log-box::-webkit-scrollbar-track { background: transparent; }
-    .log-box::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    .running .job-status-text { background: #052e16; color: #4ade80; }
+    .completed .job-status-text { background: #0c1a2e; color: #60a5fa; }
+    .stopped .job-status-text, .error .job-status-text { background: #1f0a0b; color: #f87171; }
+
+    .job-log {
+      background: #020617;
+      border-radius: 6px;
+      padding: 10px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 11px;
+      line-height: 1.6;
+      color: #64748b;
+      max-height: 160px;
+      overflow-y: auto;
+    }
+    .job-log::-webkit-scrollbar { width: 4px; }
+    .job-log::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 2px; }
 
     .log-line { white-space: pre-wrap; word-break: break-all; }
-    .log-line.success { color: #4ade80; }
-    .log-line.error { color: #f87171; }
-    .log-line.warn { color: #fbbf24; }
-    .log-line.info { color: #60a5fa; }
+    .log-line.s { color: #4ade80; }
+    .log-line.e { color: #f87171; }
+    .log-line.w { color: #fbbf24; }
+    .log-line.i { color: #60a5fa; }
 
-    .preset-chips {
+    .btn-stop-job {
+      margin-top: 10px;
+      width: 100%;
+      padding: 8px;
+      background: transparent;
+      border: 1px solid #3f1215;
+      border-radius: 6px;
+      color: #f87171;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-stop-job:hover { background: #3f1215; }
+
+    .btn-clear {
+      width: 100%;
+      padding: 10px;
+      background: transparent;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      color: #64748b;
+      font-size: 13px;
+      cursor: pointer;
+      margin-top: 4px;
+      transition: all 0.2s;
+    }
+    .btn-clear:hover { border-color: #475569; color: #94a3b8; }
+
+    .empty-state {
+      text-align: center;
+      padding: 32px 0;
+      color: #334155;
+      font-size: 14px;
+    }
+
+    .chip-row {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
-      margin-top: 8px;
+      margin-top: 6px;
     }
     .chip {
-      padding: 6px 12px;
+      padding: 5px 12px;
       background: #0f172a;
       border: 1px solid #334155;
-      border-radius: 20px;
+      border-radius: 16px;
       font-size: 12px;
       color: #94a3b8;
       cursor: pointer;
       transition: all 0.2s;
     }
-    .chip:hover { border-color: #818cf8; color: #c7d2fe; }
-    .chip.active { border-color: #818cf8; background: #1e1b4b; color: #c7d2fe; }
+    .chip:hover, .chip.active { border-color: #818cf8; color: #c7d2fe; background: #1e1b4b; }
 
-    .divider {
-      height: 1px;
-      background: #334155;
-      margin: 20px 0;
-    }
+    .divider { height: 1px; background: #1e293b; margin: 14px 0; }
 
-    footer {
-      text-align: center;
-      padding: 24px 0;
-      color: #475569;
-      font-size: 12px;
+    /* 設定區折疊 */
+    .collapse-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
     }
+    .collapse-arrow { transition: transform 0.2s; font-size: 12px; color: #475569; }
+    .collapsed .collapse-arrow { transform: rotate(-90deg); }
+    .collapsible { overflow: hidden; transition: max-height 0.3s ease; }
+    .collapsible.hidden { max-height: 0 !important; }
+
+    footer { text-align: center; padding: 16px 0; color: #1e293b; font-size: 11px; }
   </style>
 </head>
 <body>
-
 <div class="container">
+
   <header>
     <h1>🏀 場地搶位控制台</h1>
-    <p>台北市公有場地租用 — 自動搶位排程系統</p>
+    <p>台北市公有場地租用 — 多人並行搶位系統</p>
   </header>
 
-  <!-- 狀態列 -->
-  <div id="statusBar" class="status-bar status-idle">
-    <div class="status-dot"></div>
-    <span id="statusText">待命中 — 尚未設定任務</span>
+  <!-- 搶位設定（可折疊） -->
+  <div class="card" id="settingsCard">
+    <div class="collapse-toggle" onclick="toggleSettings()">
+      <div class="card-title" style="margin-bottom:0">⚙️ 搶位設定</div>
+      <span class="collapse-arrow" id="settingsArrow">▼</span>
+    </div>
+
+    <div class="collapsible" id="settingsBody" style="max-height: 2000px;">
+      <div style="height:16px"></div>
+
+      <div class="form-group">
+        <label>場地 ID</label>
+        <input type="text" id="venueId" value="27ee824a3be0" placeholder="例: 27ee824a3be0">
+        <div class="hint">從預約網址中取得，例: .../VenueDetail/<b>27ee824a3be0</b></div>
+      </div>
+
+      <div class="form-group">
+        <label>目標時段（需與網頁按鈕完全一致）</label>
+        <input type="text" id="targetDateText" value="2026/07/07(二) 20:00~22:00">
+        <div class="chip-row" id="presetChips">
+          <div class="chip" data-time="08:00~10:00">08~10</div>
+          <div class="chip" data-time="16:00~18:00">16~18</div>
+          <div class="chip" data-time="18:00~20:00">18~20</div>
+          <div class="chip active" data-time="20:00~22:00">20~22</div>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>目標月份</label>
+          <select id="targetMonth">
+            <option value="1">1 月</option><option value="2">2 月</option>
+            <option value="3">3 月</option><option value="4">4 月</option>
+            <option value="5">5 月</option><option value="6">6 月</option>
+            <option value="7" selected>7 月</option><option value="8">8 月</option>
+            <option value="9">9 月</option><option value="10">10 月</option>
+            <option value="11">11 月</option><option value="12">12 月</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>目標日期</label>
+          <input type="number" id="targetDay" value="7" min="1" max="31">
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>搶位日期</label>
+          <input type="date" id="executeDate" value="2026-06-06">
+        </div>
+        <div class="form-group">
+          <label>搶位時間</label>
+          <input type="time" id="executeTime" value="00:00" step="1">
+        </div>
+      </div>
+      <div class="hint" style="margin-top:-8px">⏰ Bot 會在這個時間精準開始搶 Step 2 時段按鈕</div>
+    </div>
   </div>
 
-  <!-- 設定區 -->
+  <!-- 加入搶位 -->
   <div class="card">
-    <h2>⚙️ 搶位設定</h2>
-
-    <div class="form-group">
-      <label>場地 ID（網址中的 ID）</label>
-      <input type="text" id="venueId" value="27ee824a3be0" placeholder="例如: 27ee824a3be0">
-      <div class="hint">從 https://service.gov.taipei/rental/OnLine/Step1/<b>27ee824a3be0</b> 中取得</div>
-    </div>
-
-    <div class="form-group">
-      <label>目標時段文字（需與網頁按鈕完全一致）</label>
-      <input type="text" id="targetDateText" value="2026/04/07(二) 20:00~22:00" placeholder="例如: 2026/04/07(二) 20:00~22:00">
-    </div>
-
-    <div class="form-row">
-      <div class="form-group">
-        <label>目標月份</label>
-        <select id="targetMonth">
-          <option value="1">1 月</option>
-          <option value="2">2 月</option>
-          <option value="3">3 月</option>
-          <option value="4" selected>4 月</option>
-          <option value="5">5 月</option>
-          <option value="6">6 月</option>
-          <option value="7">7 月</option>
-          <option value="8">8 月</option>
-          <option value="9">9 月</option>
-          <option value="10">10 月</option>
-          <option value="11">11 月</option>
-          <option value="12">12 月</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>目標日期</label>
-        <input type="number" id="targetDay" value="7" min="1" max="31">
-      </div>
-    </div>
-
-    <div class="divider"></div>
-
-    <div class="form-row">
-      <div class="form-group">
-        <label>執行日期</label>
-        <input type="date" id="executeDate" value="2026-03-07">
-      </div>
-      <div class="form-group">
-        <label>執行時間</label>
-        <input type="time" id="executeTime" value="00:00" step="1">
-      </div>
-    </div>
-
-    <div class="hint" style="margin-bottom: 16px;">
-      ⏰ 腳本會在指定時間精準啟動瀏覽器，自動完成 Step1 → Step2 → Step3
-    </div>
-
-    <div class="form-group">
-      <label>常用時段快捷選擇</label>
-      <div class="preset-chips" id="presetChips">
-        <div class="chip" data-time="18:00~20:00">18:00~20:00</div>
-        <div class="chip active" data-time="20:00~22:00">20:00~22:00</div>
-        <div class="chip" data-time="08:00~10:00">08:00~10:00</div>
-        <div class="chip" data-time="16:00~18:00">16:00~18:00</div>
-      </div>
+    <div class="card-title">🚀 加入搶位</div>
+    <button class="btn-join" onclick="joinQueue(false)">⏰ 加入排程搶位</button>
+    <button class="btn-now" onclick="joinQueue(true)">⚡ 立即測試（跳過等待）</button>
+    <div class="hint" style="margin-top:10px; text-align:center">
+      每按一次 = 多一個 Bot 實例同時搶，人越多中的機率越高
     </div>
   </div>
 
-  <!-- 操作按鈕 -->
+  <!-- 搶位任務清單 -->
   <div class="card">
-    <h2>🚀 操作</h2>
-    <div class="btn-group">
-      <button class="btn btn-start" id="btnStart" onclick="startJob(false)">
-        ⏰ 排程執行
-      </button>
-      <button class="btn btn-test" id="btnTest" onclick="startJob(true)">
-        ⚡ 立即測試
-      </button>
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+      <div class="card-title" style="margin-bottom:0">📋 搶位任務</div>
+      <button class="btn-clear" style="width:auto; padding:6px 12px; margin-top:0" onclick="clearDone()">清除已完成</button>
     </div>
-    <button class="btn btn-stop" id="btnStop" onclick="stopJob()" disabled>
-      ⏹️ 停止任務
-    </button>
-  </div>
 
-  <!-- 執行日誌 -->
-  <div class="card">
-    <h2>📋 執行日誌</h2>
-    <div class="log-box" id="logBox">
-      <div class="log-line info">等待任務啟動...</div>
+    <div id="jobsContainer">
+      <div class="empty-state">還沒有任何搶位任務<br>按上方按鈕開始！</div>
     </div>
   </div>
 
-  <footer>
-    Auto Book BBall Court v1.0 — Made with ❤️
-  </footer>
+  <footer>Auto Book BBall Court v2.0</footer>
 </div>
 
 <script>
-  // ====== 元素 ======
-  const statusBar = document.getElementById('statusBar');
-  const statusText = document.getElementById('statusText');
-  const logBox = document.getElementById('logBox');
-  const btnStart = document.getElementById('btnStart');
-  const btnTest = document.getElementById('btnTest');
-  const btnStop = document.getElementById('btnStop');
+  // ====== 設定折疊 ======
+  function toggleSettings() {
+    const body = document.getElementById('settingsBody');
+    const arrow = document.getElementById('settingsArrow');
+    const card = document.getElementById('settingsCard');
+    const isOpen = body.style.maxHeight !== '0px';
+    body.style.maxHeight = isOpen ? '0px' : '2000px';
+    arrow.style.transform = isOpen ? 'rotate(-90deg)' : '';
+  }
 
   // ====== 時段快捷 ======
   document.getElementById('presetChips').addEventListener('click', (e) => {
     const chip = e.target.closest('.chip');
     if (!chip) return;
-
     document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
     chip.classList.add('active');
-
-    const time = chip.dataset.time;
     const input = document.getElementById('targetDateText');
-    // 替換時段部分
-    input.value = input.value.replace(/\d{2}:\d{2}~\d{2}:\d{2}/, time);
+    input.value = input.value.replace(/\d{2}:\d{2}~\d{2}:\d{2}/, chip.dataset.time);
   });
 
-  // ====== 啟動任務 ======
-  async function startJob(runNow) {
+  // ====== 加入搶位 ======
+  async function joinQueue(runNow) {
     const config = {
-      venueId: document.getElementById('venueId').value.trim(),
+      venueId:        document.getElementById('venueId').value.trim(),
       targetDateText: document.getElementById('targetDateText').value.trim(),
-      targetMonth: document.getElementById('targetMonth').value,
-      targetDay: document.getElementById('targetDay').value,
-      executeDate: document.getElementById('executeDate').value,
-      executeTime: document.getElementById('executeTime').value,
+      targetMonth:    document.getElementById('targetMonth').value,
+      targetDay:      document.getElementById('targetDay').value,
+      executeDate:    document.getElementById('executeDate').value,
+      executeTime:    document.getElementById('executeTime').value,
       runNow,
     };
 
@@ -364,88 +386,90 @@
         body: JSON.stringify(config),
       });
       const data = await res.json();
-      if (!res.ok) {
-        alert(data.error || '啟動失敗');
-        return;
-      }
-      logBox.innerHTML = '<div class="log-line success">✅ 任務已啟動！</div>';
-      updateUI('running');
+      if (!res.ok) { alert(data.error || '啟動失敗'); return; }
+      // 成功後收起設定卡
+      const body = document.getElementById('settingsBody');
+      if (body.style.maxHeight !== '0px') toggleSettings();
     } catch (err) {
       alert('無法連線到伺服器: ' + err.message);
     }
   }
 
-  // ====== 停止任務 ======
-  async function stopJob() {
-    if (!confirm('確定要停止目前的任務嗎？')) return;
-    try {
-      const res = await fetch('/api/stop', { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) {
-        alert(data.error || '停止失敗');
-        return;
-      }
-    } catch (err) {
-      alert('操作失敗: ' + err.message);
-    }
+  // ====== 停止特定任務 ======
+  async function stopJob(jobId) {
+    if (!confirm('確定要停止這個任務？')) return;
+    await fetch(`/api/stop/${jobId}`, { method: 'POST' }).catch(() => {});
   }
 
-  // ====== UI 更新 ======
-  function updateUI(status) {
-    statusBar.className = 'status-bar status-' + status;
-    const messages = {
-      idle: '待命中 — 尚未設定任務',
-      running: '🟢 任務執行中...',
-      stopped: '🔴 任務已停止',
-      completed: '✅ 任務已完成',
-      error: '❌ 任務出錯',
-    };
-    statusText.textContent = messages[status] || status;
-    btnStart.disabled = status === 'running';
-    btnTest.disabled = status === 'running';
-    btnStop.disabled = status !== 'running';
+  // ====== 清除已完成 ======
+  async function clearDone() {
+    await fetch('/api/clear', { method: 'POST' }).catch(() => {});
   }
 
-  // ====== 日誌分類顏色 ======
-  function classifyLog(line) {
-    if (line.includes('✅') || line.includes('🎊') || line.includes('🎉')) return 'success';
-    if (line.includes('❌') || line.includes('錯誤') || line.includes('失敗')) return 'error';
-    if (line.includes('⚠️')) return 'warn';
-    if (line.includes('🔍') || line.includes('📅') || line.includes('📋') || line.includes('🎯')) return 'info';
+  // ====== 日誌顏色分類 ======
+  function logClass(line) {
+    if (line.includes('✅') || line.includes('🎊')) return 's';
+    if (line.includes('❌') || line.includes('錯誤') || line.includes('失敗')) return 'e';
+    if (line.includes('⚠️')) return 'w';
+    if (line.includes('🔍') || line.includes('📅') || line.includes('🎯')) return 'i';
     return '';
   }
 
-  // ====== 定時輪詢狀態 ======
-  let lastLogCount = 0;
+  function esc(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
 
-  async function pollStatus() {
+  function statusLabel(s) {
+    const map = { running: '搶位中', completed: '已完成', stopped: '已停止', error: '錯誤' };
+    return map[s] || s;
+  }
+
+  // ====== 渲染任務卡 ======
+  function renderJobs(jobs) {
+    const container = document.getElementById('jobsContainer');
+    if (jobs.length === 0) {
+      container.innerHTML = '<div class="empty-state">還沒有任何搶位任務<br>按上方按鈕開始！</div>';
+      return;
+    }
+
+    container.innerHTML = jobs.map((job, idx) => {
+      const logs = job.logs.slice(-30);
+      const logHtml = logs.map(l => `<div class="log-line ${logClass(l)}">${esc(l)}</div>`).join('');
+      const stopBtn = job.status === 'running'
+        ? `<button class="btn-stop-job" onclick="stopJob('${job.id}')">⏹ 停止這個 Bot</button>`
+        : '';
+      return `
+        <div class="job-card ${job.status}">
+          <div class="job-header">
+            <div class="job-label">
+              <div class="job-dot"></div>
+              Bot #${idx + 1}
+            </div>
+            <span class="job-status-text">${statusLabel(job.status)}</span>
+          </div>
+          <div class="job-log" id="log_${job.id}">${logHtml}</div>
+          ${stopBtn}
+        </div>`;
+    }).join('');
+
+    // 自動捲到每個 log 底部
+    jobs.forEach(job => {
+      const el = document.getElementById(`log_${job.id}`);
+      if (el) el.scrollTop = el.scrollHeight;
+    });
+  }
+
+  // ====== 定時輪詢 ======
+  async function poll() {
     try {
       const res = await fetch('/api/status');
       const data = await res.json();
-
-      updateUI(data.status);
-
-      if (data.logs && data.logs.length > 0) {
-        // 只更新新的 log
-        if (data.logs.length !== lastLogCount) {
-          logBox.innerHTML = data.logs
-            .map(line => `<div class="log-line ${classifyLog(line)}">${escapeHtml(line)}</div>`)
-            .join('');
-          logBox.scrollTop = logBox.scrollHeight;
-          lastLogCount = data.logs.length;
-        }
-      }
-    } catch (err) {
-      // ignore connection errors
-    }
+      renderJobs(data.jobs || []);
+    } catch {}
   }
 
-  function escapeHtml(str) {
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  }
-
-  // 每秒輪詢
-  setInterval(pollStatus, 1000);
+  setInterval(poll, 1000);
+  poll();
 </script>
 </body>
 </html>
