@@ -243,6 +243,29 @@
     }
     #step3Banner.visible { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
     #step3Banner a { color: #4ade80; font-weight: 600; text-decoration: none; word-break: break-all; }
+
+    /* ── Disclaimer ── */
+    .disclaimer {
+      background: #1c1008;
+      border: 1px solid #78350f;
+      border-left: 4px solid #f59e0b;
+      border-radius: 8px;
+      padding: 10px 14px;
+      flex-shrink: 0;
+    }
+    .disclaimer-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #fbbf24;
+      margin-bottom: 6px;
+    }
+    .disclaimer ul {
+      margin: 0;
+      padding-left: 14px;
+      font-size: 11px;
+      line-height: 1.7;
+    }
+    .disclaimer ul li { color: #fcd34d; opacity: 0.8; }
   </style>
 </head>
 <body>
@@ -251,6 +274,18 @@
   </div>
 
   <div class="main">
+
+    <!-- 免責聲明 -->
+    <div class="disclaimer">
+      <div class="disclaimer-title">⚠️ 免責聲明</div>
+      <ul>
+        <li>本工具僅供個人學習與研究用途，請勿用於商業牟利或大規模濫用。</li>
+        <li>使用本工具即表示您已閱讀並同意遵守台北市政府場地租借系統之使用規範。</li>
+        <li>自動化操作可能違反網站服務條款，使用者須自行承擔一切法律責任。</li>
+        <li>開發者不對任何因使用本工具而產生之損失、帳號停用或法律糾紛負責。</li>
+        <li>請合理使用，切勿因大量並行 Bot 造成政府網站服務中斷。</li>
+      </ul>
+    </div>
 
     <!-- Status bar -->
     <div class="status-bar">
