@@ -418,6 +418,22 @@
     </ul>
   </div>
 
+  <!-- 台北通登入 -->
+  <div class="card">
+    <div class="card-title">🔑 台北通登入</div>
+    <div class="hint" style="margin-bottom:12px">
+      搶位 API 需要知道是哪個會員在選位，匿名請求一律會被伺服器拒絕。<br><br>
+      <b>步驟 1：</b>先在你電腦的終端機（Terminal）手動貼上並執行這一行，開啟一個帶除錯埠的 Chrome：
+      <div style="background:#0f172a;border:1px solid #334155;border-radius:6px;padding:10px;margin:8px 0;font-family:monospace;font-size:11px;word-break:break-all;color:#4ade80;">
+        open -na "Google Chrome" --args --remote-debugging-port=9222 --user-data-dir="$HOME/Library/Application Support/autobook-chrome-profile"
+      </div>
+      <b>步驟 2：</b>在跳出的 Chrome 視窗裡<b>自己手動</b>輸入帳密完成台北通登入（帳密請勿告訴 AI 或貼到任何對話框）。
+      這個 Chrome 是你自己用一般方式開的，不是自動化程式啟動的，網站才不會把你的登入誤判成機器人。<br><br>
+      <b>步驟 3：</b>登入完成後按下方按鈕，讓搶位程式連進這個 Chrome；之後只要這個 Chrome 視窗不關，搶位任務都會沿用這次登入。
+    </div>
+    <button class="btn-join" onclick="startLogin()">🔑 連線並確認登入</button>
+  </div>
+
   <!-- 共用設定（可折疊） -->
   <div class="card" id="settingsCard">
     <div class="collapse-toggle" onclick="toggleSettings()">
@@ -728,6 +744,25 @@
     }
   }
 
+  // ====== 台北通登入 ======
+  async function startLogin() {
+    const venueId = document.getElementById('venueId').value.trim();
+    if (!venueId) { alert('請先在下方「共用設定」填寫場地 ID'); return; }
+
+    try {
+      const res = await fetch('/api/login-start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ venueId }),
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || '啟動失敗'); return; }
+      alert('正在連線到你手動開啟的 Chrome（如果還沒開，請先照上面的步驟 1 在終端機執行那行指令）。連線成功後請在該視窗自己輸入帳密完成台北通登入，完成後回來這裡在下方任務卡按「完成登入」。');
+    } catch (err) {
+      alert('無法連線到伺服器: ' + err.message);
+    }
+  }
+
   // ====== 單一搶位 ======
   async function joinQueue(runNow) {
     const config = {
@@ -761,8 +796,9 @@
   }
 
   // ====== 停止 / 清除 ======
-  async function stopJob(jobId) {
-    if (!confirm('確定要停止這個任務？')) return;
+  async function stopJob(jobId, isLogin) {
+    const msg = isLogin ? '確定已經完成台北通登入了嗎？（只會中斷程式跟 Chrome 的連線，不會關閉你的 Chrome 視窗）' : '確定要停止這個任務？';
+    if (!confirm(msg)) return;
     await fetch(`/api/stop/${jobId}`, { method: 'POST' }).catch(() => {});
   }
 
@@ -828,7 +864,7 @@
       const logs = job.logs.slice(-30);
       const logHtml = logs.map(l => `<div class="log-line ${logClass(l)}">${esc(l)}</div>`).join('');
       const stopBtn = job.status === 'running'
-        ? `<button class="btn-stop-job" onclick="stopJob('${job.id}')">⏹ 停止此任務</button>`
+        ? `<button class="btn-stop-job" onclick="stopJob('${job.id}', ${!!job.isLogin})">${job.isLogin ? '✅ 完成登入' : '⏹ 停止此任務'}</button>`
         : '';
       const step3Banner = job.step3Url
         ? `<div class="step3-banner">

@@ -80,7 +80,7 @@ class BookingSession {
     const TARGET_MONTH = parseInt(targetMonth);
     const TARGET_DAY = parseInt(targetDay);
     const NUM_BOTS = parseInt(numBots) || 2;
-    const PRE_LOAD_SECONDS = 15;
+    const PRE_LOAD_SECONDS = 60;
 
     const STEP1_URL = `https://service.gov.taipei/rental/OnLine/Step1/${venueId}`;
     const STEP2_URL = `https://service.gov.taipei/rental/OnLine/Step2/${venueId}`;
@@ -163,13 +163,11 @@ class BookingSession {
           'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
         );
 
-        let botAlert = false;
         page.on('dialog', async (dialog) => {
           const msg = dialog.message();
           this.log(`[Bot ${botId}] 💬 彈窗: "${msg}"`);
+          // 一律自動接受，避免卡住頁面；彈窗本身不代表成功或失敗，一律以是否導到 Step3 為準
           await dialog.accept();
-          // 「本時段僅保留10分鐘」是網站送出前一定會顯示的提示，不代表搶到了，只記錄
-          botAlert = true;
         });
 
         await this._preLoad(page, botId, STEP1_URL, STEP2_URL, targetDateText, TARGET_MONTH, TARGET_DAY);
@@ -186,7 +184,7 @@ class BookingSession {
         if (this.aborted) return { browser, page, success: false, botId };
 
         const success = await this._selectAndSubmit(
-          page, botId, targetDateText, STEP2_URL, STEP1_PATH, shared, () => botAlert
+          page, botId, targetDateText, STEP2_URL, STEP1_PATH, shared
         );
         return { browser, page, success, botId };
       } catch (err) {
@@ -396,39 +394,36 @@ class BookingSession {
         const text = await res.text();
 
         // 伺服器對「時段已被搶走」等情況有時會回 500 + HTML 錯誤頁（不是 JSON），
-        // 一定要先擋掉，否則會把整個錯誤頁誤判成「成功片段」塞進 #SessionList
+        // 一定要先擋掉，否則會把整個錯誤頁誤判成「成功片段」塞進 #ScheduleList
         if (!res.ok) {
           return { ok: false, message: `HTTP ${res.status}`, httpError: true };
         }
 
         let json = null;
-        try { json = JSON.parse(text); } catch (e) { /* 不是 JSON，代表是成功的 HTML 片段 */ }
+        try { json = JSON.parse(text); } catch (e) { /* 不是 JSON，代表是成功的 HTML 片段（與網站原生點擊行為一致） */ }
 
         if (json) {
           return { ok: false, message: json.message || text };
         }
 
-        const sessionList = document.getElementById('SessionList');
-        if (sessionList) sessionList.innerHTML = text;
+        // 網站原生點擊時段按鈕的回呼是把片段寫進 #ScheduleList（不是 #SessionList，
+        // 這裡曾經寫錯過，導致選位其實已經成功，但畫面沒更新、程式誤判失敗一直重試到逾時）
+        const scheduleList = document.getElementById('ScheduleList');
+        if (scheduleList) scheduleList.innerHTML = text;
         if (typeof getSessionChoose === 'function') getSessionChoose();
 
-        const btn = document.querySelector(`div.btn2[alldate="${allDate}"]`);
-        const chosen = !!btn && btn.getAttribute('ischoose') === '1';
-        return {
-          ok: chosen,
-          message: chosen ? null : '選位後按鈕狀態未變為 ischoose=1',
-          status: btn ? btn.getAttribute('status') : null,
-        };
+        // 網站原生 handler 對「非 JSON 回應」本身就視為成功，不再額外檢查 ischoose 屬性
+        return { ok: true };
       } catch (e) {
         return { ok: false, message: e.message, networkError: true };
       }
     }, venueId, targetDateText);
   }
 
-  async _selectTargetSlot(page, botId, venueId, targetDateText, deadlineTs, getBotAlert, shared) {
+  async _selectTargetSlot(page, botId, venueId, targetDateText, deadlineTs, shared) {
     let attempt = 0;
     while (this.now() < deadlineTs) {
-      if (shared.done || getBotAlert() || this.aborted) return false;
+      if (shared.done || this.aborted) return false;
       attempt += 1;
 
       const result = await this._chooseSlotViaFetch(page, venueId, targetDateText);
@@ -472,7 +467,7 @@ class BookingSession {
     return null;
   }
 
-  async _selectAndSubmit(page, botId, targetDateText, STEP2_URL, STEP1_PATH, shared, getBotAlert) {
+  async _selectAndSubmit(page, botId, targetDateText, STEP2_URL, STEP1_PATH, shared) {
     if (shared.done) {
       this.log(`[Bot ${botId}] 其他 Bot 已成功，略過`);
       return false;
@@ -483,21 +478,13 @@ class BookingSession {
     if (!ready) return false;
     if (shared.done) return false;
 
-    const preCheck = await page.evaluate((t) => {
-      const btn = document.querySelector(`div.btn2[alldate="${t}"]`);
-      if (!btn) return { found: false };
-      return { found: true, rented: btn.getAttribute('status') === '4' || btn.classList.contains('rented') };
-    }, targetDateText);
-
-    if (preCheck.found && preCheck.rented) {
-      this.log(`[Bot ${botId}] ❌ 時段已被他人預訂`);
-      return false;
-    }
-
+    // 不再用 status/class 猜測「已被搶走」或「尚未開放」（status=4 在網站圖例上寫的是
+    // 「尚未開放」，不是「已出租」，用它判斷已被搶走方向是錯的），一律直接呼叫選位 API，
+    // 讓伺服器的真實回應（TAKEN_KEYWORDS）判斷是否真的被搶走
     const venueId = STEP2_URL.split('/').pop();
     const chooseDeadline = this.now() + CHOOSE_TIMEOUT_MS;
-    const chosen = await this._selectTargetSlot(page, botId, venueId, targetDateText, chooseDeadline, getBotAlert, shared);
-    if (!chosen || shared.done || getBotAlert()) return false;
+    const chosen = await this._selectTargetSlot(page, botId, venueId, targetDateText, chooseDeadline, shared);
+    if (!chosen || shared.done) return false;
 
     const step3Url = await this._submitReservation(page, botId);
     if (step3Url) {

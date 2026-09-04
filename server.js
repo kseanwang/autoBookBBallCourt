@@ -15,11 +15,15 @@ function makeJobId() {
   return `job_${++jobSeq}_${Date.now()}`;
 }
 
-function startJob(config) {
+function startJob(config, opts = {}) {
   const jobId = makeJobId();
 
   const args = ['auto-book.js'];
-  if (config.runNow) args.push('--now');
+  if (opts.login) {
+    args.push('--login');
+  } else if (config.runNow) {
+    args.push('--now');
+  }
   args.push('--config', JSON.stringify(config));
 
   const child = spawn('node', args, {
@@ -34,6 +38,7 @@ function startJob(config) {
     status: 'running',
     logs: [],
     startTime: new Date().toISOString(),
+    isLogin: !!opts.login,
   };
   jobs.set(jobId, job);
 
@@ -77,8 +82,19 @@ app.get('/api/status', (req, res) => {
     startTime: j.startTime,
     logs: j.logs.slice(-100),
     step3Url: j.step3Url || null,
+    isLogin: !!j.isLogin,
   }));
   res.json({ jobs: jobList });
+});
+
+// ====== API: 啟動登入模式（開一個看得到畫面的瀏覽器，讓使用者自己完成台北通登入）======
+app.post('/api/login-start', (req, res) => {
+  const { venueId } = req.body;
+  if (!venueId) {
+    return res.status(400).json({ error: '缺少場地 ID' });
+  }
+  const jobId = startJob({ venueId, name: '🔑 登入台北通' }, { login: true });
+  res.json({ success: true, jobId });
 });
 
 // ====== API: 啟動單一搶位任務 ======

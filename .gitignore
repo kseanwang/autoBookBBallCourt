@@ -7,3 +7,5 @@ dist/
 build/
 logs/
 *.png
+# 台北通登入 session（Chrome 使用者資料夾），內含真實登入 cookie，絕對不能進版控
+.puppeteer-profile/
