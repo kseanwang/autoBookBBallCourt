@@ -8,45 +8,15 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ====== 狀態管理：支援多個並行任務 ======
-const jobs = new Map(); // jobId -> job object
+const jobs = new Map();
 let jobSeq = 0;
 
 function makeJobId() {
   return `job_${++jobSeq}_${Date.now()}`;
 }
 
-// ====== API: 取得所有任務狀態 ======
-app.get('/api/status', (req, res) => {
-  const jobList = Array.from(jobs.values()).map(j => ({
-    id: j.id,
-    name: j.config.name || '未知',
-    status: j.status,
-    startTime: j.startTime,
-    logs: j.logs.slice(-100),
-    step3Url: j.step3Url || null,
-  }));
-  res.json({ jobs: jobList });
-});
-
-// ====== API: 啟動搶位任務（允許多個並行） ======
-app.post('/api/start', (req, res) => {
-  const {
-    venueId, targetDateText, targetMonth, targetDay,
-    executeDate, executeTime, runNow,
-  } = req.body;
-
-  if (!venueId || !targetDateText || !executeDate || !executeTime) {
-    return res.status(400).json({ error: '缺少必要設定欄位' });
-  }
-
+function startJob(config) {
   const jobId = makeJobId();
-  const config = {
-    venueId, targetDateText,
-    targetMonth: parseInt(targetMonth),
-    targetDay: parseInt(targetDay),
-    executeDate, executeTime,
-    runNow: !!runNow,
-  };
 
   const args = ['auto-book.js'];
   if (config.runNow) args.push('--now');
@@ -95,7 +65,72 @@ app.post('/api/start', (req, res) => {
     job.logs.push(`[錯誤] ${err.message}`);
   });
 
-  res.json({ success: true, jobId, name: config.name });
+  return jobId;
+}
+
+// ====== API: 取得所有任務狀態 ======
+app.get('/api/status', (req, res) => {
+  const jobList = Array.from(jobs.values()).map(j => ({
+    id: j.id,
+    name: j.config.name || j.config.targetDateText || '未知',
+    status: j.status,
+    startTime: j.startTime,
+    logs: j.logs.slice(-100),
+    step3Url: j.step3Url || null,
+  }));
+  res.json({ jobs: jobList });
+});
+
+// ====== API: 啟動單一搶位任務 ======
+app.post('/api/start', (req, res) => {
+  const {
+    venueId, targetDateText, targetMonth, targetDay,
+    executeDate, executeTime, runNow, name, numBots,
+  } = req.body;
+
+  if (!venueId || !targetDateText || !executeDate || !executeTime) {
+    return res.status(400).json({ error: '缺少必要設定欄位' });
+  }
+
+  const config = {
+    name: name || targetDateText,
+    venueId, targetDateText,
+    targetMonth: parseInt(targetMonth),
+    targetDay: parseInt(targetDay),
+    executeDate, executeTime,
+    runNow: !!runNow,
+    numBots: parseInt(numBots) || 2,
+  };
+
+  const jobId = startJob(config);
+  res.json({ success: true, jobId });
+});
+
+// ====== API: 批次啟動多個時段 ======
+app.post('/api/start-batch', (req, res) => {
+  const { slots } = req.body;
+
+  if (!Array.isArray(slots) || slots.length === 0) {
+    return res.status(400).json({ error: '缺少時段清單' });
+  }
+
+  for (const slot of slots) {
+    if (!slot.venueId || !slot.targetDateText || !slot.executeDate || !slot.executeTime) {
+      return res.status(400).json({ error: `時段設定不完整: ${slot.name || slot.targetDateText}` });
+    }
+  }
+
+  // 批次清單裡的每一筆本身就代表「一個 Bot」（UI 端已依 Bot 數量展開成多筆），
+  // 這裡固定 numBots=1，避免每個 process 內部又預設再開 2 個瀏覽器造成數量爆炸。
+  const jobIds = slots.map(slot => startJob({
+    ...slot,
+    targetMonth: parseInt(slot.targetMonth),
+    targetDay: parseInt(slot.targetDay),
+    runNow: !!slot.runNow,
+    numBots: 1,
+  }));
+
+  res.json({ success: true, jobIds, count: jobIds.length });
 });
 
 // ====== API: 停止特定任務 ======

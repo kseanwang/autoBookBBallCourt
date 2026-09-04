@@ -18,6 +18,10 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+const OPEN_WAIT_TIMEOUT_MS = 15000;
+const CHOOSE_TIMEOUT_MS = 8000;
+const TAKEN_KEYWORDS = ['已出租', '已被預約', '已被訂', '已額滿', '已租', '已預約'];
+
 class BookingSession {
   constructor(onLog, onStatus) {
     this.onLog = onLog;
@@ -25,6 +29,7 @@ class BookingSession {
     this.browsers = [];
     this.aborted = false;
     this.running = false;
+    this.timeOffsetMs = 0;
   }
 
   log(msg) {
@@ -32,6 +37,27 @@ class BookingSession {
     const line = `[${now}] ${msg}`;
     console.log(line);
     this.onLog(line);
+  }
+
+  // 與伺服器時間的偏移量（ms）：serverTime = Date.now() + timeOffsetMs
+  now() {
+    return Date.now() + this.timeOffsetMs;
+  }
+
+  async syncServerTime() {
+    try {
+      const res = await fetch('https://service.gov.taipei/rental/', { method: 'HEAD' });
+      const dateHeader = res.headers.get('date');
+      const serverTime = dateHeader ? new Date(dateHeader).getTime() : NaN;
+      if (!Number.isNaN(serverTime)) {
+        this.timeOffsetMs = serverTime - Date.now();
+        this.log(`🕐 已校正伺服器時間，偏移量: ${this.timeOffsetMs}ms`);
+        return;
+      }
+    } catch (e) {
+      this.log(`⚠️ 時間校正失敗，改用本機時鐘: ${e.message}`);
+    }
+    this.timeOffsetMs = 0;
   }
 
   stop() {
@@ -58,14 +84,16 @@ class BookingSession {
 
     const STEP1_URL = `https://service.gov.taipei/rental/OnLine/Step1/${venueId}`;
     const STEP2_URL = `https://service.gov.taipei/rental/OnLine/Step2/${venueId}`;
-    const STEP3_URL = `https://service.gov.taipei/rental/OnLine/Step3/${venueId}`;
+    // 場地是否開放受理的真正閘門是 Step1（Step2 只認「這個 session 是否已經 GET 過 Step1」，
+    // 跟場地本身開不開放無關；一個 session 沒 visit 過 Step1 就直接打 Step2 一律會被導回首頁）
+    const STEP1_PATH = `/rental/OnLine/Step1/${venueId}`;
 
     let EXECUTE_TIME = null;
     if (executeDate && executeTime) {
       EXECUTE_TIME = new Date(`${executeDate}T${executeTime}:00+08:00`);
     }
 
-    this.log(`🚀 搶位腳本啟動 v3.0`);
+    this.log(`🚀 搶位腳本啟動 v4.0`);
     this.log(`📍 場地 ID: ${venueId}`);
     this.log(`🎯 目標時段：${targetDateText}`);
     this.log(`🤖 並行 Bot 數量：${NUM_BOTS}`);
@@ -73,13 +101,14 @@ class BookingSession {
       this.log(`⏰ 預定執行：${EXECUTE_TIME.toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}`);
     }
 
+    await this.syncServerTime();
+
     // ── 倒數等待（到預熱時間）──
     if (!runNow && EXECUTE_TIME) {
       const preLoadTime = new Date(EXECUTE_TIME.getTime() - PRE_LOAD_SECONDS * 1000);
       while (true) {
         if (this.aborted) { this.running = false; return; }
-        const now = new Date();
-        const diff = preLoadTime.getTime() - now.getTime();
+        const diff = preLoadTime.getTime() - this.now();
         if (diff <= 0) { this.log('⏰ 預熱時間到！啟動瀏覽器並預載頁面...'); break; }
 
         const h = Math.floor(diff / 3600000);
@@ -139,18 +168,15 @@ class BookingSession {
           const msg = dialog.message();
           this.log(`[Bot ${botId}] 💬 彈窗: "${msg}"`);
           await dialog.accept();
-          if (msg.includes('保留10分鐘') || msg.includes('10分鐘內預約')) {
-            botAlert = true;
-            shared.done = true;
-            this.log(`[Bot ${botId}] 🎉 偵測到預約確認彈窗 → 搶位成功！`);
-          }
+          // 「本時段僅保留10分鐘」是網站送出前一定會顯示的提示，不代表搶到了，只記錄
+          botAlert = true;
         });
 
         await this._preLoad(page, botId, STEP1_URL, STEP2_URL, targetDateText, TARGET_MONTH, TARGET_DAY);
 
         // 精準等待到整點
         if (!runNow && EXECUTE_TIME) {
-          while (new Date().getTime() < EXECUTE_TIME.getTime()) {
+          while (this.now() < EXECUTE_TIME.getTime()) {
             if (this.aborted) break;
             await sleep(10);
           }
@@ -159,8 +185,8 @@ class BookingSession {
 
         if (this.aborted) return { browser, page, success: false, botId };
 
-        const success = await this._clickSlotAndProceed(
-          page, botId, targetDateText, STEP3_URL, TARGET_MONTH, TARGET_DAY, shared, () => botAlert
+        const success = await this._selectAndSubmit(
+          page, botId, targetDateText, STEP2_URL, STEP1_PATH, shared, () => botAlert
         );
         return { browser, page, success, botId };
       } catch (err) {
@@ -206,26 +232,32 @@ class BookingSession {
     }
   }
 
-  // ── 預熱：直接嘗試 Step2，被重導才補做 Step1 ──
+  // ── 預熱：嘗試走到 Step2；若場地尚未開放受理，只記錄狀態不當作錯誤 ──
   async _preLoad(page, botId, STEP1_URL, STEP2_URL, targetDateText, TARGET_MONTH, TARGET_DAY) {
     this.log(`[Bot ${botId}] 📄 直接嘗試載入 Step2...`);
     try {
-      await page.goto(STEP2_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.goto(STEP2_URL, { waitUntil: 'domcontentloaded', timeout: 15000 });
     } catch (err) {
       this.log(`[Bot ${botId}] ⚠️ Step2 載入超時，繼續...`);
     }
 
-    if (!page.url().includes('Step2')) {
+    if (!page.url().includes('/OnLine/Step2/')) {
       await this._doStep1(page, botId, STEP1_URL, STEP2_URL);
     }
 
+    if (!page.url().includes('/OnLine/Step2/')) {
+      this.log(`[Bot ${botId}] ⚠️ 場地目前尚未開放受理，將於執行時間持續嘗試進入`);
+      return;
+    }
+
+    await page.waitForSelector('#CounterPeriodForm', { timeout: 8000 }).catch(() => {});
     await page.waitForSelector('.datepicker-switch', { timeout: 5000 }).catch(() => {});
     this.log(`[Bot ${botId}] 📅 導航日曆到 ${TARGET_MONTH}/${TARGET_DAY}...`);
     await this._navigateToTargetDate(page, TARGET_MONTH, TARGET_DAY, targetDateText);
 
     const btnInfo = await page.evaluate((t) => {
       const btn = document.querySelector(`div.btn2[alldate="${t}"]`);
-      return btn ? { disabled: btn.classList.contains('disabled'), status: btn.getAttribute('status') } : null;
+      return btn ? { status: btn.getAttribute('status'), ischoose: btn.getAttribute('ischoose'), rented: btn.classList.contains('rented') } : null;
     }, targetDateText);
     this.log(`[Bot ${botId}] ✅ 預熱完成，按鈕: ${JSON.stringify(btnInfo)}`);
   }
@@ -234,9 +266,14 @@ class BookingSession {
   async _doStep1(page, botId, STEP1_URL, STEP2_URL) {
     this.log(`[Bot ${botId}] 📋 Step1：閱讀並同意條款`);
     try {
-      await page.goto(STEP1_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.goto(STEP1_URL, { waitUntil: 'domcontentloaded', timeout: 15000 });
     } catch (err) {
       this.log(`[Bot ${botId}] ⚠️ Step1 載入超時，繼續...`);
+    }
+
+    if (!page.url().includes('/OnLine/Step1/')) {
+      // 被導回首頁：場地尚未開放受理
+      return;
     }
 
     await page.waitForSelector('#chkYes', { timeout: 5000 }).catch(() => {});
@@ -247,24 +284,21 @@ class BookingSession {
       await page.evaluate(() => { if (typeof CheckRead === 'function') CheckRead(); });
     }
 
-    await page.waitForSelector('#PersonalPolicyYes', { timeout: 5000 }).catch(() => {});
     const btn = await page.$('#PersonalPolicyYes');
     if (btn) {
       try {
         await Promise.all([
-          page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
+          page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 10000 }),
           page.click('#PersonalPolicyYes'),
         ]);
       } catch (err) {
-        if (!page.url().includes('Step2')) {
-          await page.goto(STEP2_URL, { waitUntil: 'domcontentloaded', timeout: 15000 });
-        }
+        // 忽略，交由呼叫端檢查最終 URL
       }
     }
     this.log(`[Bot ${botId}] ✅ Step1 完成`);
   }
 
-  // ── 導航日曆到目標日期 ──
+  // ── 導航日曆到目標日期（僅用於預熱期的視覺化確認，非必要步驟）──
   async _navigateToTargetDate(page, TARGET_MONTH, TARGET_DAY, targetDateText) {
     const monthNames = ['','一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
     const targetMonthCN = monthNames[TARGET_MONTH] || '';
@@ -299,110 +333,182 @@ class BookingSession {
     await page.waitForSelector(`div.btn2[alldate="${targetDateText}"]`, { timeout: 3000 }).catch(() => {});
   }
 
-  // ── 點擊時段並推進到 Step3 ──
-  async _clickSlotAndProceed(page, botId, targetDateText, STEP3_URL, TARGET_MONTH, TARGET_DAY, shared, getBotAlert) {
+  // ── 場地開放輪詢：輕量 fetch（redirect:manual）偵測 Step1 是否已可進入。
+  //    用 Step1 而不是 Step2，是因為 Step2 能不能進只看這個 session 有沒有 GET 過
+  //    Step1（與場地開不開放無關），Step1 才是真正受「未開放受理」管制的關卡；
+  //    這次 fetch 成功時 session 也同時記到「已看過 Step1」，緊接著 goto Step2 就會成功 ──
+  async _pollStep1Reachable(page, path, deadlineTs) {
+    while (this.now() < deadlineTs) {
+      if (this.aborted) return false;
+      const reachable = await page.evaluate(async (p) => {
+        try {
+          const res = await fetch(p, { method: 'GET', credentials: 'same-origin', redirect: 'manual' });
+          return res.type !== 'opaqueredirect' && res.status === 200;
+        } catch (e) {
+          return false;
+        }
+      }, path).catch(() => false);
+      if (reachable) return true;
+      await sleep(120);
+    }
+    return false;
+  }
+
+  async _ensureStep2Ready(page, botId, STEP2_URL, STEP1_PATH, deadlineTs) {
+    if (page.url().includes('/OnLine/Step2/')) {
+      const hasForm = await page.$('#CounterPeriodForm');
+      if (hasForm) return true;
+    }
+
+    this.log(`[Bot ${botId}] ⏳ 場地尚未開放，開始輪詢...`);
+    const reachable = await this._pollStep1Reachable(page, STEP1_PATH, deadlineTs);
+    if (!reachable) {
+      this.log(`[Bot ${botId}] ❌ 等待場地開放逾時`);
+      return false;
+    }
+
+    this.log(`[Bot ${botId}] 🚪 偵測到場地開放，進入 Step2...`);
+    try {
+      await page.goto(STEP2_URL, { waitUntil: 'domcontentloaded', timeout: 8000 });
+    } catch (err) {
+      this.log(`[Bot ${botId}] ⚠️ Step2 載入超時: ${err.message}`);
+    }
+    if (!page.url().includes('/OnLine/Step2/')) return false;
+
+    await page.waitForSelector('#CounterPeriodForm', { timeout: 5000 }).catch(() => {});
+    return !!(await page.$('#CounterPeriodForm'));
+  }
+
+  // ── 直接呼叫網站的選位 API（等同真人點擊時段按鈕），
+  //    選成功後呼叫網站原生 getSessionChoose() 補齊送出表單所需的隱藏欄位 ──
+  async _chooseSlotViaFetch(page, venueId, targetDateText) {
+    return page.evaluate(async (ObjectID, allDate) => {
+      try {
+        const res = await fetch('/rental/CounterPlace/chooseRentalPartial', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          body: `ObjectID=${encodeURIComponent(ObjectID)}&allDate=${encodeURIComponent(allDate)}`,
+          credentials: 'same-origin',
+        });
+        const text = await res.text();
+
+        // 伺服器對「時段已被搶走」等情況有時會回 500 + HTML 錯誤頁（不是 JSON），
+        // 一定要先擋掉，否則會把整個錯誤頁誤判成「成功片段」塞進 #SessionList
+        if (!res.ok) {
+          return { ok: false, message: `HTTP ${res.status}`, httpError: true };
+        }
+
+        let json = null;
+        try { json = JSON.parse(text); } catch (e) { /* 不是 JSON，代表是成功的 HTML 片段 */ }
+
+        if (json) {
+          return { ok: false, message: json.message || text };
+        }
+
+        const sessionList = document.getElementById('SessionList');
+        if (sessionList) sessionList.innerHTML = text;
+        if (typeof getSessionChoose === 'function') getSessionChoose();
+
+        const btn = document.querySelector(`div.btn2[alldate="${allDate}"]`);
+        const chosen = !!btn && btn.getAttribute('ischoose') === '1';
+        return {
+          ok: chosen,
+          message: chosen ? null : '選位後按鈕狀態未變為 ischoose=1',
+          status: btn ? btn.getAttribute('status') : null,
+        };
+      } catch (e) {
+        return { ok: false, message: e.message, networkError: true };
+      }
+    }, venueId, targetDateText);
+  }
+
+  async _selectTargetSlot(page, botId, venueId, targetDateText, deadlineTs, getBotAlert, shared) {
+    let attempt = 0;
+    while (this.now() < deadlineTs) {
+      if (shared.done || getBotAlert() || this.aborted) return false;
+      attempt += 1;
+
+      const result = await this._chooseSlotViaFetch(page, venueId, targetDateText);
+      if (result.ok) {
+        this.log(`[Bot ${botId}] ✅ 已選定時段（第 ${attempt} 次嘗試）`);
+        return true;
+      }
+
+      const msg = result.message || '未知原因';
+      if (TAKEN_KEYWORDS.some(k => msg.includes(k))) {
+        this.log(`[Bot ${botId}] ❌ 時段已被他人搶走：${msg}`);
+        return false;
+      }
+      if (attempt === 1 || attempt % 5 === 0) {
+        this.log(`[Bot ${botId}] 第 ${attempt} 次選位未成功：${msg}`);
+      }
+      await sleep(150);
+    }
+    this.log(`[Bot ${botId}] ❌ 選位逾時`);
+    return false;
+  }
+
+  // ── 送出預約：成功與否一律以是否真的導到 Step3 為準 ──
+  async _submitReservation(page, botId) {
+    this.log(`[Bot ${botId}] 🔄 送出預約...`);
+    const navPromise = page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 10000 }).catch(() => null);
+    await page.evaluate(() => {
+      if (typeof showReservationAlert === 'function') {
+        showReservationAlert();
+      }
+    });
+    await navPromise;
+
+    if (page.url().includes('/OnLine/Step3/')) return page.url();
+
+    const extraDeadline = Date.now() + 3000;
+    while (Date.now() < extraDeadline) {
+      if (page.url().includes('/OnLine/Step3/')) return page.url();
+      await sleep(150);
+    }
+    return null;
+  }
+
+  async _selectAndSubmit(page, botId, targetDateText, STEP2_URL, STEP1_PATH, shared, getBotAlert) {
     if (shared.done) {
       this.log(`[Bot ${botId}] 其他 Bot 已成功，略過`);
       return false;
     }
 
-    this.log(`[Bot ${botId}] 🎯 點擊目標時段...`);
+    const openDeadline = this.now() + OPEN_WAIT_TIMEOUT_MS;
+    const ready = await this._ensureStep2Ready(page, botId, STEP2_URL, STEP1_PATH, openDeadline);
+    if (!ready) return false;
+    if (shared.done) return false;
 
-    let btnHandle = await page.$(`div.btn2[alldate="${targetDateText}"]`);
-    if (!btnHandle) {
-      this.log(`[Bot ${botId}] ⚠️ 按鈕不見，重新導航...`);
-      await page.reload({ waitUntil: 'domcontentloaded', timeout: 10000 }).catch(() => {});
-      await this._navigateToTargetDate(page, TARGET_MONTH, TARGET_DAY, targetDateText);
-      btnHandle = await page.$(`div.btn2[alldate="${targetDateText}"]`);
-    }
-
-    if (!btnHandle) {
-      this.log(`[Bot ${botId}] ❌ 找不到目標時段按鈕`);
-      return false;
-    }
-
-    const btnInfo = await page.evaluate((t) => {
+    const preCheck = await page.evaluate((t) => {
       const btn = document.querySelector(`div.btn2[alldate="${t}"]`);
-      if (!btn) return null;
-      if (btn.getAttribute('status') === '4' || btn.classList.contains('rented')) return { rented: true };
-      return { disabled: btn.classList.contains('disabled'), status: btn.getAttribute('status') };
+      if (!btn) return { found: false };
+      return { found: true, rented: btn.getAttribute('status') === '4' || btn.classList.contains('rented') };
     }, targetDateText);
 
-    if (btnInfo?.rented) {
+    if (preCheck.found && preCheck.rented) {
       this.log(`[Bot ${botId}] ❌ 時段已被他人預訂`);
       return false;
     }
-    this.log(`[Bot ${botId}] 按鈕狀態: ${JSON.stringify(btnInfo)}`);
 
-    for (let attempt = 1; attempt <= 5; attempt++) {
-      if (shared.done || getBotAlert()) break;
-      if (attempt > 1) this.log(`[Bot ${botId}] 第 ${attempt} 次點擊...`);
+    const venueId = STEP2_URL.split('/').pop();
+    const chooseDeadline = this.now() + CHOOSE_TIMEOUT_MS;
+    const chosen = await this._selectTargetSlot(page, botId, venueId, targetDateText, chooseDeadline, getBotAlert, shared);
+    if (!chosen || shared.done || getBotAlert()) return false;
 
-      await page.evaluate((t) => {
-        const btn = document.querySelector(`div.btn2[alldate="${t}"]`);
-        if (btn) btn.classList.remove('disabled');
-      }, targetDateText);
-
-      btnHandle = await page.$(`div.btn2[alldate="${targetDateText}"]`);
-      if (!btnHandle) break;
-      await btnHandle.click();
-
-      await page.waitForFunction(
-        (t) => {
-          const btn = document.querySelector(`div.btn2[alldate="${t}"]`);
-          return !btn || btn.getAttribute('ischoose') === '1';
-        },
-        { timeout: 1500 },
-        targetDateText
-      ).then(() => true).catch(() => false);
-
-      if (getBotAlert()) break;
-    }
-
-    await sleep(200);
-    this.log(`[Bot ${botId}] post-loop: botAlert=${getBotAlert()}, shared.done=${shared.done}`);
-
-    const naturalDeadline = Date.now() + 800;
-    while (Date.now() < naturalDeadline) {
-      if (page.url().includes('Step3')) break;
-      if (getBotAlert()) break;
-      if (shared.done) { this.log(`[Bot ${botId}] 其他 Bot 已成功，退出`); return false; }
-      await sleep(100);
-    }
-
-    if (getBotAlert()) {
-      this.log(`[Bot ${botId}] 🎉 預約確認，直接導航 Step3...`);
-      try {
-        await page.goto(STEP3_URL, { waitUntil: 'domcontentloaded', timeout: 15000 });
-      } catch (e) {
-        this.log(`[Bot ${botId}] ⚠️ goto Step3: ${e.message}`);
-      }
-    } else if (!page.url().includes('Step3') && !shared.done) {
-      this.log(`[Bot ${botId}] 🔄 觸發 showReservationAlert...`);
-      const navPromise = page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }).catch(() => null);
-      await page.evaluate(() => {
-        if (typeof showReservationAlert === 'function') {
-          showReservationAlert();
-        } else {
-          const btns = document.querySelectorAll('a.btn-green, a.btn');
-          for (const btn of btns) {
-            if (btn.textContent.trim() === '下一步') { btn.click(); return; }
-          }
-        }
-      });
-      await navPromise;
-    }
-
-    const url = page.url();
-    this.log(`[Bot ${botId}] 📍 當前 URL: ${url}`);
-    if (url.includes('Step3')) {
+    const step3Url = await this._submitReservation(page, botId);
+    if (step3Url) {
       shared.done = true;
-      shared.step3Url = url;
-      this.log(`[Bot ${botId}] ✅ 成功進入 Step3！`);
+      shared.step3Url = step3Url;
+      this.log(`[Bot ${botId}] 🎉 成功進入 Step3！`);
       return true;
     }
 
-    return getBotAlert();
+    this.log(`[Bot ${botId}] ❌ 送出後未導到 Step3，目前 URL: ${page.url()}`);
+    return false;
   }
 }
 

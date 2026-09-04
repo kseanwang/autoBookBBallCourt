@@ -67,7 +67,7 @@
 
     .hint { font-size: 11px; color: #475569; margin-top: 4px; }
 
-    /* 大按鈕 */
+    /* 按鈕 */
     .btn-join {
       width: 100%;
       padding: 16px;
@@ -99,14 +99,38 @@
     }
     .btn-now:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(59,130,246,0.4); }
 
-    /* 任務列表 */
-    .job-count {
-      font-size: 13px;
-      color: #64748b;
-      margin-bottom: 12px;
+    .btn-batch {
+      width: 100%;
+      padding: 16px;
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: #1c1008;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      letter-spacing: 0.5px;
     }
-    .job-count span { color: #4ade80; font-weight: 700; }
+    .btn-batch:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(245,158,11,0.4); }
+    .btn-batch:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
 
+    .btn-batch-now {
+      width: 100%;
+      padding: 11px;
+      background: transparent;
+      border: 1px solid #d97706;
+      color: #fbbf24;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: all 0.2s;
+    }
+    .btn-batch-now:hover { background: #1c1008; }
+
+    /* 任務列表 */
     .job-card {
       background: #0f172a;
       border: 1px solid #1e293b;
@@ -273,9 +297,78 @@
       user-select: none;
     }
     .collapse-arrow { transition: transform 0.2s; font-size: 12px; color: #475569; }
-    .collapsed .collapse-arrow { transform: rotate(-90deg); }
     .collapsible { overflow: hidden; transition: max-height 0.3s ease; }
     .collapsible.hidden { max-height: 0 !important; }
+
+    /* 批次時段清單 */
+    .slot-list { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; }
+    .slot-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+      user-select: none;
+    }
+    .slot-item:hover { border-color: #334155; }
+    .slot-item.checked { border-color: #f59e0b; background: #1c1008; }
+    .slot-item input[type=checkbox] { display: none; }
+    .slot-check {
+      width: 16px; height: 16px;
+      border: 1.5px solid #475569;
+      border-radius: 4px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      transition: all 0.15s;
+    }
+    .slot-item.checked .slot-check { background: #f59e0b; border-color: #f59e0b; color: #1c1008; }
+    .slot-day {
+      font-size: 12px;
+      color: #64748b;
+      min-width: 36px;
+    }
+    .slot-time {
+      font-size: 13px;
+      font-weight: 600;
+      color: #e2e8f0;
+      flex: 1;
+    }
+    .slot-date {
+      font-size: 11px;
+      color: #475569;
+    }
+
+    .batch-controls {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .btn-select-all, .btn-deselect-all {
+      padding: 5px 12px;
+      background: transparent;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      color: #64748b;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-select-all:hover, .btn-deselect-all:hover { border-color: #475569; color: #94a3b8; }
+
+    .batch-count {
+      font-size: 12px;
+      color: #64748b;
+      margin-left: auto;
+      align-self: center;
+    }
+    .batch-count span { color: #fbbf24; font-weight: 700; }
 
     footer { text-align: center; padding: 16px 0; color: #1e293b; font-size: 11px; }
 
@@ -300,8 +393,6 @@
       margin: 0;
       padding-left: 16px;
       font-size: 12px;
-      color: #92400e;
-      color: #d97706;
       line-height: 1.8;
     }
     .disclaimer ul li { color: #fcd34d; opacity: 0.85; }
@@ -327,10 +418,10 @@
     </ul>
   </div>
 
-  <!-- 搶位設定（可折疊） -->
+  <!-- 共用設定（可折疊） -->
   <div class="card" id="settingsCard">
     <div class="collapse-toggle" onclick="toggleSettings()">
-      <div class="card-title" style="margin-bottom:0">⚙️ 搶位設定</div>
+      <div class="card-title" style="margin-bottom:0">⚙️ 共用設定</div>
       <span class="collapse-arrow" id="settingsArrow">▼</span>
     </div>
 
@@ -343,41 +434,12 @@
         <div class="hint">從預約網址中取得，例: .../VenueDetail/<b>27ee824a3be0</b></div>
       </div>
 
-      <div class="form-group">
-        <label>目標時段（需與網頁按鈕完全一致）</label>
-        <input type="text" id="targetDateText" value="2026/07/07(二) 20:00~22:00">
-        <div class="chip-row" id="presetChips">
-          <div class="chip" data-time="08:00~10:00">08~10</div>
-          <div class="chip" data-time="16:00~18:00">16~18</div>
-          <div class="chip" data-time="18:00~20:00">18~20</div>
-          <div class="chip active" data-time="20:00~22:00">20~22</div>
-        </div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label>目標月份</label>
-          <select id="targetMonth">
-            <option value="1">1 月</option><option value="2">2 月</option>
-            <option value="3">3 月</option><option value="4">4 月</option>
-            <option value="5">5 月</option><option value="6">6 月</option>
-            <option value="7" selected>7 月</option><option value="8">8 月</option>
-            <option value="9">9 月</option><option value="10">10 月</option>
-            <option value="11">11 月</option><option value="12">12 月</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>目標日期</label>
-          <input type="number" id="targetDay" value="7" min="1" max="31">
-        </div>
-      </div>
-
       <div class="divider"></div>
 
       <div class="form-row">
         <div class="form-group">
           <label>搶位日期</label>
-          <input type="date" id="executeDate" value="2026-06-06">
+          <input type="date" id="executeDate" value="2026-09-05">
         </div>
         <div class="form-group">
           <label>搶位時間</label>
@@ -388,13 +450,104 @@
     </div>
   </div>
 
-  <!-- 加入搶位 -->
+  <!-- 批次搶位 -->
   <div class="card">
-    <div class="card-title">🚀 加入搶位</div>
-    <button class="btn-join" onclick="joinQueue(false)">⏰ 加入排程搶位</button>
-    <button class="btn-now" onclick="joinQueue(true)">⚡ 立即測試（跳過等待）</button>
-    <div class="hint" style="margin-top:10px; text-align:center">
-      每按一次 = 多一個 Bot 實例同時搶，人越多中的機率越高
+    <div class="collapse-toggle" onclick="toggleBatch()">
+      <div class="card-title" style="margin-bottom:0">🗓️ 批次搶位（多時段同時啟動）</div>
+      <span class="collapse-arrow" id="batchArrow">▼</span>
+    </div>
+
+    <div class="collapsible" id="batchBody" style="max-height: 3000px;">
+      <div style="height:16px"></div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>第一週週一日期</label>
+          <input type="date" id="batchMonday" value="2026-10-05" onchange="updateSlotDates()">
+        </div>
+        <div class="form-group">
+          <label>Bo 數量（每時段）</label>
+          <select id="batchNumBots">
+            <option value="1">1 個 Bot</option>
+            <option value="2" selected>2 個 Bot</option>
+            <option value="3">3 個 Bot</option>
+          </select>
+        </div>
+      </div>
+      <div class="hint" style="margin-top:-8px">輸入下一季開放日期的第一個週一，系統自動計算各時段日期</div>
+
+      <div style="height:12px"></div>
+
+      <div class="batch-controls">
+        <button class="btn-select-all" onclick="selectAllSlots()">全選</button>
+        <button class="btn-deselect-all" onclick="deselectAllSlots()">全消</button>
+        <div class="batch-count">已選 <span id="selectedCount">13</span> 個時段</div>
+      </div>
+
+      <div class="slot-list" id="slotList"></div>
+
+      <button class="btn-batch" onclick="startBatch(false)">
+        🚀 啟動全部選中時段
+      </button>
+      <button class="btn-batch-now" onclick="startBatch(true)">
+        ⚡ 立即測試（跳過等待）
+      </button>
+      <div class="hint" style="margin-top:8px; text-align:center">
+        每個時段會啟動獨立 Bot，13 個時段同時並行搶位
+      </div>
+    </div>
+  </div>
+
+  <!-- 單一搶位（可折疊） -->
+  <div class="card" id="singleCard">
+    <div class="collapse-toggle" onclick="toggleSingle()">
+      <div class="card-title" style="margin-bottom:0">🎯 單一時段搶位</div>
+      <span class="collapse-arrow" id="singleArrow">▼</span>
+    </div>
+
+    <div class="collapsible" id="singleBody" style="max-height: 0px;">
+      <div style="height:16px"></div>
+
+      <div class="form-group">
+        <label>目標時段（需與網頁按鈕完全一致）</label>
+        <input type="text" id="targetDateText" value="2026/10/06(二) 20:00~22:00">
+        <div class="chip-row" id="presetChips">
+          <div class="chip" data-time="08:00~10:00">08~10</div>
+          <div class="chip" data-time="16:00~18:00">16~18</div>
+          <div class="chip" data-time="18:00~20:00">18~20</div>
+          <div class="chip active" data-time="20:00~22:00">20~22</div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Bot 數量</label>
+        <select id="singleNumBots">
+          <option value="1">1 個 Bot</option>
+          <option value="2" selected>2 個 Bot</option>
+          <option value="3">3 個 Bot</option>
+        </select>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>目標月份</label>
+          <select id="targetMonth">
+            <option value="1">1 月</option><option value="2">2 月</option>
+            <option value="3">3 月</option><option value="4">4 月</option>
+            <option value="5">5 月</option><option value="6">6 月</option>
+            <option value="7">7 月</option><option value="8">8 月</option>
+            <option value="9">9 月</option><option value="10" selected>10 月</option>
+            <option value="11">11 月</option><option value="12">12 月</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>目標日期</label>
+          <input type="number" id="targetDay" value="6" min="1" max="31">
+        </div>
+      </div>
+
+      <button class="btn-join" onclick="joinQueue(false)">⏰ 加入排程搶位</button>
+      <button class="btn-now" onclick="joinQueue(true)">⚡ 立即測試（跳過等待）</button>
     </div>
   </div>
 
@@ -410,31 +563,172 @@
     </div>
   </div>
 
-  <footer>Auto Book BBall Court v2.0</footer>
+  <footer>Auto Book BBall Court v3.0</footer>
 </div>
 
 <script>
-  // ====== 設定折疊 ======
-  function toggleSettings() {
-    const body = document.getElementById('settingsBody');
-    const arrow = document.getElementById('settingsArrow');
-    const card = document.getElementById('settingsCard');
-    const isOpen = body.style.maxHeight !== '0px';
-    body.style.maxHeight = isOpen ? '0px' : '2000px';
-    arrow.style.transform = isOpen ? 'rotate(-90deg)' : '';
+  // ====== 批次時段定義 ======
+  // dayOffset: 距離週一的天數, day: 中文週次, time: 時段字串
+  const BATCH_SLOTS = [
+    { dayOffset: 0, day: '一', time: '18:00~20:00' },
+    { dayOffset: 0, day: '一', time: '20:00~22:00' },
+    { dayOffset: 1, day: '二', time: '20:00~22:00' },
+    { dayOffset: 2, day: '三', time: '20:00~22:00' },
+    { dayOffset: 3, day: '四', time: '20:00~22:00' },
+    { dayOffset: 4, day: '五', time: '18:00~20:00' },
+    { dayOffset: 4, day: '五', time: '20:00~22:00' },
+    { dayOffset: 5, day: '六', time: '18:00~20:00' },
+    { dayOffset: 5, day: '六', time: '20:00~22:00' },
+    { dayOffset: 6, day: '日', time: '08:00~10:00' },
+    { dayOffset: 6, day: '日', time: '16:00~18:00' },
+    { dayOffset: 6, day: '日', time: '18:00~20:00' },
+    { dayOffset: 6, day: '日', time: '20:00~22:00' },
+  ];
+
+  const DAY_CHARS = ['一', '二', '三', '四', '五', '六', '日'];
+
+  function getMondayDate() {
+    const val = document.getElementById('batchMonday').value;
+    return val ? new Date(val + 'T00:00:00+08:00') : null;
   }
 
-  // ====== 時段快捷 ======
-  document.getElementById('presetChips').addEventListener('click', (e) => {
-    const chip = e.target.closest('.chip');
-    if (!chip) return;
-    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-    chip.classList.add('active');
-    const input = document.getElementById('targetDateText');
-    input.value = input.value.replace(/\d{2}:\d{2}~\d{2}:\d{2}/, chip.dataset.time);
-  });
+  function slotDate(mondayDate, dayOffset) {
+    const d = new Date(mondayDate.getTime() + dayOffset * 86400000);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const dayChar = DAY_CHARS[dayOffset];
+    return { y, m, day, dayChar, dateObj: d };
+  }
 
-  // ====== 加入搶位 ======
+  function buildTargetDateText(mondayDate, slot) {
+    const { y, m, day, dayChar } = slotDate(mondayDate, slot.dayOffset);
+    return `${y}/${m}/${day}(${dayChar}) ${slot.time}`;
+  }
+
+  function renderSlotList() {
+    const monday = getMondayDate();
+    const container = document.getElementById('slotList');
+    container.innerHTML = BATCH_SLOTS.map((slot, idx) => {
+      let dateStr = '';
+      if (monday) {
+        const { m, day } = slotDate(monday, slot.dayOffset);
+        dateStr = `${parseInt(m)}/${parseInt(day)}`;
+      }
+      return `
+        <div class="slot-item checked" id="slot_${idx}" onclick="toggleSlot(${idx})">
+          <div class="slot-check">✓</div>
+          <div class="slot-day">週${slot.day}</div>
+          <div class="slot-time">${slot.time}</div>
+          <div class="slot-date">${dateStr}</div>
+        </div>`;
+    }).join('');
+    updateSelectedCount();
+  }
+
+  function updateSlotDates() {
+    const monday = getMondayDate();
+    BATCH_SLOTS.forEach((slot, idx) => {
+      const el = document.querySelector(`#slot_${idx} .slot-date`);
+      if (!el) return;
+      if (monday) {
+        const { m, day } = slotDate(monday, slot.dayOffset);
+        el.textContent = `${parseInt(m)}/${parseInt(day)}`;
+      } else {
+        el.textContent = '';
+      }
+    });
+  }
+
+  function toggleSlot(idx) {
+    const el = document.getElementById(`slot_${idx}`);
+    el.classList.toggle('checked');
+    const check = el.querySelector('.slot-check');
+    check.textContent = el.classList.contains('checked') ? '✓' : '';
+    updateSelectedCount();
+  }
+
+  function selectAllSlots() {
+    BATCH_SLOTS.forEach((_, idx) => {
+      const el = document.getElementById(`slot_${idx}`);
+      el.classList.add('checked');
+      el.querySelector('.slot-check').textContent = '✓';
+    });
+    updateSelectedCount();
+  }
+
+  function deselectAllSlots() {
+    BATCH_SLOTS.forEach((_, idx) => {
+      const el = document.getElementById(`slot_${idx}`);
+      el.classList.remove('checked');
+      el.querySelector('.slot-check').textContent = '';
+    });
+    updateSelectedCount();
+  }
+
+  function updateSelectedCount() {
+    const count = document.querySelectorAll('.slot-item.checked').length;
+    document.getElementById('selectedCount').textContent = count;
+    document.querySelector('.btn-batch').disabled = count === 0;
+  }
+
+  // ====== 批次啟動 ======
+  async function startBatch(runNow) {
+    const monday = getMondayDate();
+    if (!monday) { alert('請選擇第一週週一日期'); return; }
+
+    const venueId = document.getElementById('venueId').value.trim();
+    const executeDate = document.getElementById('executeDate').value;
+    const executeTime = document.getElementById('executeTime').value;
+    const numBots = parseInt(document.getElementById('batchNumBots').value);
+
+    if (!venueId) { alert('請填寫場地 ID'); return; }
+    if (!executeDate || !executeTime) { alert('請填寫搶位日期與時間'); return; }
+
+    const selectedSlots = [];
+    BATCH_SLOTS.forEach((slot, idx) => {
+      const el = document.getElementById(`slot_${idx}`);
+      if (!el.classList.contains('checked')) return;
+
+      const { y, m, day } = slotDate(monday, slot.dayOffset);
+      const targetDateText = buildTargetDateText(monday, slot);
+      const name = `週${slot.day} ${slot.time}`;
+
+      for (let b = 0; b < numBots; b++) {
+        selectedSlots.push({
+          name: numBots > 1 ? `${name} (Bot ${b + 1})` : name,
+          venueId,
+          targetDateText,
+          targetMonth: parseInt(m),
+          targetDay: parseInt(day),
+          executeDate,
+          executeTime,
+          runNow,
+          numBots: 1, // 每筆已代表一個獨立 Bot，避免 process 內部再乘倍
+        });
+      }
+    });
+
+    if (selectedSlots.length === 0) { alert('請選擇至少一個時段'); return; }
+
+    try {
+      const res = await fetch('/api/start-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slots: selectedSlots }),
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || '啟動失敗'); return; }
+      alert(`已啟動 ${data.count} 個搶位任務！`);
+      // 收起批次設定
+      const body = document.getElementById('batchBody');
+      if (body.style.maxHeight !== '0px') toggleBatch();
+    } catch (err) {
+      alert('無法連線到伺服器: ' + err.message);
+    }
+  }
+
+  // ====== 單一搶位 ======
   async function joinQueue(runNow) {
     const config = {
       venueId:        document.getElementById('venueId').value.trim(),
@@ -443,8 +737,10 @@
       targetDay:      document.getElementById('targetDay').value,
       executeDate:    document.getElementById('executeDate').value,
       executeTime:    document.getElementById('executeTime').value,
+      numBots:        parseInt(document.getElementById('singleNumBots').value),
       runNow,
     };
+    config.name = config.targetDateText;
 
     if (!config.venueId || !config.targetDateText) {
       alert('請填寫場地 ID 和目標時段');
@@ -459,26 +755,50 @@
       });
       const data = await res.json();
       if (!res.ok) { alert(data.error || '啟動失敗'); return; }
-      // 成功後收起設定卡
-      const body = document.getElementById('settingsBody');
-      if (body.style.maxHeight !== '0px') toggleSettings();
     } catch (err) {
       alert('無法連線到伺服器: ' + err.message);
     }
   }
 
-  // ====== 停止特定任務 ======
+  // ====== 停止 / 清除 ======
   async function stopJob(jobId) {
     if (!confirm('確定要停止這個任務？')) return;
     await fetch(`/api/stop/${jobId}`, { method: 'POST' }).catch(() => {});
   }
 
-  // ====== 清除已完成 ======
   async function clearDone() {
     await fetch('/api/clear', { method: 'POST' }).catch(() => {});
   }
 
-  // ====== 日誌顏色分類 ======
+  // ====== 折疊 ======
+  function toggleSettings() {
+    toggleCollapse('settingsBody', 'settingsArrow');
+  }
+  function toggleBatch() {
+    toggleCollapse('batchBody', 'batchArrow');
+  }
+  function toggleSingle() {
+    toggleCollapse('singleBody', 'singleArrow');
+  }
+  function toggleCollapse(bodyId, arrowId) {
+    const body = document.getElementById(bodyId);
+    const arrow = document.getElementById(arrowId);
+    const isOpen = body.style.maxHeight !== '0px';
+    body.style.maxHeight = isOpen ? '0px' : '3000px';
+    arrow.style.transform = isOpen ? 'rotate(-90deg)' : '';
+  }
+
+  // ====== 時段快捷（單一模式） ======
+  document.getElementById('presetChips').addEventListener('click', (e) => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    const input = document.getElementById('targetDateText');
+    input.value = input.value.replace(/\d{2}:\d{2}~\d{2}:\d{2}/, chip.dataset.time);
+  });
+
+  // ====== 日誌顏色 ======
   function logClass(line) {
     if (line.includes('✅') || line.includes('🎊')) return 's';
     if (line.includes('❌') || line.includes('錯誤') || line.includes('失敗')) return 'e';
@@ -504,11 +824,11 @@
       return;
     }
 
-    container.innerHTML = jobs.map((job, idx) => {
+    container.innerHTML = jobs.map(job => {
       const logs = job.logs.slice(-30);
       const logHtml = logs.map(l => `<div class="log-line ${logClass(l)}">${esc(l)}</div>`).join('');
       const stopBtn = job.status === 'running'
-        ? `<button class="btn-stop-job" onclick="stopJob('${job.id}')">⏹ 停止這個 Bot</button>`
+        ? `<button class="btn-stop-job" onclick="stopJob('${job.id}')">⏹ 停止此任務</button>`
         : '';
       const step3Banner = job.step3Url
         ? `<div class="step3-banner">
@@ -521,7 +841,7 @@
           <div class="job-header">
             <div class="job-label">
               <div class="job-dot"></div>
-              Bot #${idx + 1}
+              ${esc(job.name)}
             </div>
             <span class="job-status-text">${statusLabel(job.status)}</span>
           </div>
@@ -531,7 +851,6 @@
         </div>`;
     }).join('');
 
-    // 自動捲到每個 log 底部
     jobs.forEach(job => {
       const el = document.getElementById(`log_${job.id}`);
       if (el) el.scrollTop = el.scrollHeight;
@@ -549,6 +868,9 @@
 
   setInterval(poll, 1000);
   poll();
+
+  // ====== 初始化 ======
+  renderSlotList();
 </script>
 </body>
 </html>
